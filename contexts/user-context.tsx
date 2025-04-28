@@ -1,6 +1,9 @@
 "use client"
 
 import { createContext, useContext, useState, useEffect, type ReactNode } from "react"
+import { supabase } from "@/lib/supabase"
+import { signIn, signUp, signOut, getSession, getCurrentUser } from "@/lib/auth"
+import { upsertProfile, getProfileById } from "@/lib/profiles"
 
 type User = {
   id: string
@@ -15,7 +18,7 @@ type UserContextType = {
   isLoading: boolean
   login: (email: string, password: string) => Promise<void>
   register: (name: string, email: string, password: string, location: string) => Promise<void>
-  logout: () => void
+  logout: () => Promise<void>
 }
 
 const UserContext = createContext<UserContextType | undefined>(undefined)
@@ -24,62 +27,161 @@ export function UserProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [isLoading, setIsLoading] = useState(true)
 
-  // Check for saved user on mount
+  // Check for active session on mount
   useEffect(() => {
-    const savedUser = localStorage.getItem("courselog-user")
-    if (savedUser) {
-      setUser(JSON.parse(savedUser))
-    }
-    setIsLoading(false)
-  }, [])
+    const checkSession = async () => {
+      try {
+        const currentUser = await getCurrentUser();
+        
+        if (currentUser) {
+          // Get profile data
+          try {
+            const profile = await getProfileById(currentUser.id);
+            
+            setUser({
+              id: currentUser.id,
+              name: profile?.username || currentUser.email?.split('@')[0] || 'User',
+              email: currentUser.email || '',
+              location: profile?.location || '',
+              image: profile?.avatar_url
+            });
+          } catch (error) {
+            console.error("Error fetching profile:", error);
+            
+            // Fallback to just auth data
+            setUser({
+              id: currentUser.id,
+              name: currentUser.email?.split('@')[0] || 'User',
+              email: currentUser.email || '',
+              location: '',
+            });
+          }
+        }
+      } catch (error) {
+        console.error("Session check error:", error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    
+    checkSession();
+    
+    // Set up auth state change listener
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        if (event === 'SIGNED_IN' && session?.user) {
+          try {
+            const profile = await getProfileById(session.user.id);
+            
+            setUser({
+              id: session.user.id,
+              name: profile?.username || session.user.email?.split('@')[0] || 'User',
+              email: session.user.email || '',
+              location: profile?.location || '',
+              image: profile?.avatar_url
+            });
+          } catch (error) {
+            // Profile might not exist yet
+            setUser({
+              id: session.user.id,
+              name: session.user.email?.split('@')[0] || 'User',
+              email: session.user.email || '',
+              location: '',
+            });
+          }
+        } else if (event === 'SIGNED_OUT') {
+          setUser(null);
+        }
+      }
+    );
+    
+    // Cleanup subscription
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
 
-  // Simulate login
+  // Login with Supabase
   const login = async (email: string, password: string) => {
-    setIsLoading(true)
-
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 1000))
-
-    // Create mock user
-    const mockUser = {
-      id: "user1",
-      name: email.split("@")[0],
-      email,
-      location: "Johannesburg, Gauteng",
+    setIsLoading(true);
+    
+    try {
+      const { user: authUser } = await signIn(email, password);
+      
+      if (!authUser) {
+        throw new Error("Login failed");
+      }
+      
+      try {
+        const profile = await getProfileById(authUser.id);
+        
+        setUser({
+          id: authUser.id,
+          name: profile?.username || authUser.email?.split('@')[0] || 'User',
+          email: authUser.email || '',
+          location: profile?.location || '',
+          image: profile?.avatar_url
+        });
+      } catch (error) {
+        // Profile might not exist
+        setUser({
+          id: authUser.id,
+          name: authUser.email?.split('@')[0] || 'User',
+          email: authUser.email || '',
+          location: '',
+        });
+      }
+    } catch (error) {
+      console.error("Login error:", error);
+      throw error;
+    } finally {
+      setIsLoading(false);
     }
+  };
 
-    // Save to localStorage
-    localStorage.setItem("courselog-user", JSON.stringify(mockUser))
-    setUser(mockUser)
-    setIsLoading(false)
-  }
-
-  // Simulate registration
+  // Register with Supabase
   const register = async (name: string, email: string, password: string, location: string) => {
-    setIsLoading(true)
-
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 1000))
-
-    // Create new user
-    const newUser = {
-      id: `user${Date.now()}`,
-      name,
-      email,
-      location,
+    setIsLoading(true);
+    
+    try {
+      const { user: authUser } = await signUp(email, password);
+      
+      if (!authUser) {
+        throw new Error("Registration failed");
+      }
+      
+      // Create profile
+      await upsertProfile(authUser.id, {
+        username: name,
+        full_name: name,
+        location,
+        user_id: authUser.id
+      });
+      
+      setUser({
+        id: authUser.id,
+        name,
+        email: authUser.email || '',
+        location,
+      });
+    } catch (error) {
+      console.error("Registration error:", error);
+      throw error;
+    } finally {
+      setIsLoading(false);
     }
-
-    // Save to localStorage
-    localStorage.setItem("courselog-user", JSON.stringify(newUser))
-    setUser(newUser)
-    setIsLoading(false)
-  }
+  };
 
   // Logout
-  const logout = () => {
-    localStorage.removeItem("courselog-user")
-    setUser(null)
-  }
+  const logout = async () => {
+    try {
+      await signOut();
+      setUser(null);
+    } catch (error) {
+      console.error("Logout error:", error);
+      throw error;
+    }
+  };
 
   return <UserContext.Provider value={{ user, isLoading, login, register, logout }}>{children}</UserContext.Provider>
 }
