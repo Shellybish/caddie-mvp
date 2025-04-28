@@ -144,19 +144,22 @@ export function UserProvider({ children }: { children: ReactNode }) {
     setIsLoading(true);
     
     try {
-      const { user: authUser } = await signUp(email, password);
+      // Pass the user metadata to be used by our trigger
+      const { user: authUser } = await signUp(email, password, {
+        data: {
+          name: name,
+          username: name,
+          full_name: name,
+          location: location
+        }
+      });
       
       if (!authUser) {
         throw new Error("Registration failed");
       }
       
-      // Create profile
-      await upsertProfile(authUser.id, {
-        username: name,
-        full_name: name,
-        location,
-        user_id: authUser.id
-      });
+      // The database trigger will create the profile automatically
+      // so we don't need to manually call upsertProfile here
       
       setUser({
         id: authUser.id,
@@ -164,6 +167,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
         email: authUser.email || '',
         location,
       });
+      
     } catch (error) {
       console.error("Registration error:", error);
       throw error;

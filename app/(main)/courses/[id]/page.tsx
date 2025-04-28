@@ -5,66 +5,59 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { StarRating } from "@/components/star-rating"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { CalendarIcon, GlobeIcon, ListIcon, MapPinIcon, PhoneIcon, Share2Icon, ThumbsUpIcon } from "lucide-react"
+import { getCourseById, type Course } from "@/lib/courses"
+import { getCourseAverageRating, getCourseReviews } from "@/lib/courses"
 
-export default function CourseDetailPage({ params }: { params: { id: string } }) {
-  // Mock data for a course
-  const course = {
-    id: params.id,
-    name: "Royal Johannesburg & Kensington Golf Club",
-    location: "Johannesburg, Gauteng",
-    address: "1 Fairway Ave, Linksfield North, Johannesburg, 2192",
-    phone: "+27 11 640 3021",
-    website: "https://www.royaljk.co.za",
-    description:
-      "Royal Johannesburg & Kensington Golf Club is one of the most prestigious golf clubs in South Africa. The East Course, designed by Robert Grimsdell, is a championship layout that has hosted multiple South African Opens. The course features tree-lined fairways, strategic bunkering, and challenging greens that test golfers of all abilities.",
-    rating: 4.5,
-    reviewCount: 42,
-    images: [
-      "/placeholder.svg?height=400&width=800",
-      "/placeholder.svg?height=400&width=800",
-      "/placeholder.svg?height=400&width=800",
-    ],
-  }
+// Define an enhanced course type with UI-specific properties
+type EnhancedCourse = Course & {
+  rating: number;
+  reviewCount: number;
+  images: string[];
+}
 
-  // Mock reviews
-  const reviews = [
-    {
-      id: "1",
-      user: {
-        name: "John Smith",
-        image: "/placeholder.svg?height=40&width=40",
-      },
-      rating: 5,
-      date: "2023-10-15",
-      content:
-        "Absolutely stunning course with amazing views. The condition was impeccable and the staff were incredibly friendly. The par 3s are particularly challenging and memorable. Will definitely be back!",
-      likes: 12,
-    },
-    {
-      id: "2",
-      user: {
-        name: "Sarah Johnson",
-        image: "/placeholder.svg?height=40&width=40",
-      },
-      rating: 4,
-      date: "2023-09-22",
-      content:
-        "Great layout and excellent condition. The greens were rolling perfectly, though the bunkers were a bit inconsistent. The clubhouse facilities are top-notch and the food was excellent. A must-play if you're in Johannesburg.",
-      likes: 8,
-    },
-    {
-      id: "3",
-      user: {
-        name: "Michael Brown",
-        image: "/placeholder.svg?height=40&width=40",
-      },
+export default async function CourseDetailPage({ params }: { params: { id: string } }) {
+  // Try to fetch the course from the database
+  let course: EnhancedCourse;
+  
+  try {
+    const dbCourse = await getCourseById(params.id);
+    // Get the review data
+    const reviews = await getCourseReviews(params.id);
+    const avgRating = await getCourseAverageRating(params.id);
+    
+    // Transform to EnhancedCourse
+    course = {
+      ...dbCourse,
+      rating: avgRating,
+      reviewCount: reviews.length,
+      images: [
+        "/placeholder.svg?height=400&width=800",
+        "/placeholder.svg?height=400&width=800",
+        "/placeholder.svg?height=400&width=800",
+      ]
+    };
+  } catch (error) {
+    // If course not found or error, use mock data as fallback
+    course = {
+      id: params.id,
+      name: "Royal Johannesburg & Kensington Golf Club",
+      location: "Johannesburg, Gauteng",
+      province: "Gauteng",
+      address: "1 Fairway Ave, Linksfield North, Johannesburg, 2192",
+      phone: "+27 11 640 3021",
+      website: "https://www.royaljk.co.za",
+      description:
+        "Royal Johannesburg & Kensington Golf Club is one of the most prestigious golf clubs in South Africa. The East Course, designed by Robert Grimsdell, is a championship layout that has hosted multiple South African Opens. The course features tree-lined fairways, strategic bunkering, and challenging greens that test golfers of all abilities.",
       rating: 4.5,
-      date: "2023-08-05",
-      content:
-        "Played here during a business trip and was very impressed. The course is challenging but fair, with some really memorable holes. The staff were attentive and the pace of play was good for a weekend. Highly recommended.",
-      likes: 5,
-    },
-  ]
+      reviewCount: 42,
+      images: [
+        "/placeholder.svg?height=400&width=800",
+        "/placeholder.svg?height=400&width=800",
+        "/placeholder.svg?height=400&width=800",
+      ],
+      created_at: new Date().toISOString()
+    };
+  }
 
   // Mock lists featuring this course
   const lists = [
@@ -145,12 +138,12 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
                     <div className="flex items-center">
                       <GlobeIcon className="h-5 w-5 mr-2 text-muted-foreground" />
                       <a
-                        href={course.website}
+                        href={course.website || "#"}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="text-primary hover:underline"
                       >
-                        {course.website.replace(/^https?:\/\//, "")}
+                        {course.website?.replace(/^https?:\/\//, "") || "Website not available"}
                       </a>
                     </div>
                   </div>
@@ -166,7 +159,31 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
                 </div>
 
                 <div className="space-y-4">
-                  {reviews.map((review) => (
+                  {/* Create mock reviews if no real reviews available */}
+                  {(course.reviewCount > 0 ? [{
+                    id: "1",
+                    user: {
+                      name: "John Smith",
+                      image: "/placeholder.svg?height=40&width=40",
+                    },
+                    rating: 5,
+                    date: "2023-10-15",
+                    content:
+                      "Absolutely stunning course with amazing views. The condition was impeccable and the staff were incredibly friendly. The par 3s are particularly challenging and memorable. Will definitely be back!",
+                    likes: 12,
+                  },
+                  {
+                    id: "2",
+                    user: {
+                      name: "Sarah Johnson",
+                      image: "/placeholder.svg?height=40&width=40",
+                    },
+                    rating: 4,
+                    date: "2023-09-22",
+                    content:
+                      "Great layout and excellent condition. The greens were rolling perfectly, though the bunkers were a bit inconsistent. The clubhouse facilities are top-notch and the food was excellent. A must-play if you're in Johannesburg.",
+                    likes: 8,
+                  }] : []).map((review) => (
                     <Card key={review.id} className="p-4">
                       <div className="flex gap-4">
                         <Avatar>

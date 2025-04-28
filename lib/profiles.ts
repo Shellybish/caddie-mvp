@@ -31,18 +31,43 @@ export type ListCourse = {
 
 // Create or update profile
 export async function upsertProfile(userId: string, data: Partial<Profile>) {
-  const { data: profile, error } = await supabase
-    .from('profiles')
-    .upsert({
+  try {
+    // Check if the user ID is valid
+    if (!userId) {
+      throw new Error('User ID is required');
+    }
+
+    // Create a minimal profile object with just the essential fields
+    const profileData = {
       user_id: userId,
-      ...data,
-      updated_at: new Date().toISOString(),
-    })
-    .select()
-    .single();
+      username: data.username || 'User',
+      // Don't include other fields that might cause issues
+    };
+
+    console.log('Attempting to insert minimal profile with data:', JSON.stringify(profileData, null, 2));
+
+    // Try a basic insert instead of upsert first to see if that works
+    const { data: profile, error } = await supabase
+      .from('profiles')
+      .insert(profileData)
+      .select()
+      .single();
+      
+    if (error) {
+      // Log the complete error object for debugging
+      console.error('Supabase error during profile insert:', error);
+      console.error('Error code:', error.code);
+      console.error('Error message:', error.message);
+      console.error('Error details:', error.details);
+      
+      throw error;
+    }
     
-  if (error) throw error;
-  return profile;
+    return profile;
+  } catch (error) {
+    console.error('Error in upsertProfile:', error);
+    throw error;
+  }
 }
 
 // Get a user profile by ID

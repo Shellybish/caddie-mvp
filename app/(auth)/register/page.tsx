@@ -43,10 +43,11 @@ export default function RegisterPage() {
 
       // Redirect to onboarding
       router.push("/onboarding")
-    } catch (error) {
+    } catch (error: any) {
+      console.error("Registration error:", error)
       toast({
-        title: "Error",
-        description: "There was a problem creating your account.",
+        title: "Registration failed",
+        description: error.message || "There was a problem creating your account. Please try again.",
         variant: "destructive",
       })
     } finally {

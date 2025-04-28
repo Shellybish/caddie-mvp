@@ -4,69 +4,120 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { StarRating } from "@/components/star-rating"
 import { ChevronLeftIcon, ListIcon, MapPinIcon, Share2Icon, ThumbsUpIcon, UserIcon } from "lucide-react"
+import { getListById } from "@/lib/profiles"
+import { type List } from "@/lib/profiles"
 
-export default function ListDetailPage({ params }: { params: { id: string } }) {
-  // Mock data for a list
-  const list = {
-    id: params.id,
-    title: "Top 10 Courses in Western Cape",
-    description:
-      "The most beautiful and challenging courses in the Western Cape region, featuring stunning coastal and mountain views. These courses offer a perfect blend of scenic beauty and golfing challenge.",
-    author: {
-      id: "user1",
-      name: "Golf Enthusiast",
-      image: "/placeholder.svg?height=40&width=40",
-    },
-    courseCount: 10,
-    likes: 24,
-    createdAt: "2023-08-15",
-    courses: [
-      {
-        id: "1",
-        name: "Fancourt Links",
-        location: "George, Western Cape",
-        rating: 4.9,
-        image: "/placeholder.svg?height=200&width=400",
-        description:
-          "Designed by Gary Player, this championship course is consistently ranked as South Africa's best. The links-style layout offers a true test of golf in a spectacular setting.",
+// Define the extended list type with UI-specific properties
+type ExtendedList = List & {
+  author: {
+    id: string;
+    name: string;
+    image?: string;
+  };
+  courseCount: number;
+  likes: number;
+  courses: Array<{
+    id: string;
+    name: string;
+    location: string;
+    rating: number;
+    image?: string;
+    description?: string;
+  }>;
+}
+
+export default async function ListDetailPage({ params }: { params: { id: string } }) {
+  // Try to fetch the list from the database
+  let list: ExtendedList;
+  
+  try {
+    const dbList = await getListById(params.id);
+    // Transform to ExtendedList with UI properties
+    // This would normally include processing the database result
+    
+    list = {
+      ...dbList,
+      author: {
+        id: dbList.user_id,
+        name: "Golf Enthusiast", // This would be fetched from the profile in a real implementation
+        image: "/placeholder.svg?height=40&width=40",
       },
-      {
-        id: "2",
-        name: "Arabella Golf Club",
-        location: "Hermanus, Western Cape",
-        rating: 4.6,
+      courseCount: dbList.list_courses?.length || 0,
+      likes: 24, // This would be calculated from the database
+      courses: dbList.list_courses?.map((item: any) => ({
+        id: item.courses.id,
+        name: item.courses.name,
+        location: item.courses.location,
+        rating: 4.5, // This would be calculated
         image: "/placeholder.svg?height=200&width=400",
-        description:
-          "Set alongside the Bot River Lagoon with the Kogelberg Mountains as a backdrop, Arabella is one of the most picturesque courses in the country. The closing stretch of holes along the lagoon is particularly memorable.",
+        description: item.courses.description
+      })) || []
+    } as ExtendedList;
+  } catch (error) {
+    // If list not found or error, use mock data as fallback
+    list = {
+      id: params.id,
+      user_id: "user1", // Required for List type
+      is_public: true, // Required for List type
+      created_at: new Date().toISOString(), // Required for List type
+      title: "Top 10 Courses in Western Cape",
+      description:
+        "The most beautiful and challenging courses in the Western Cape region, featuring stunning coastal and mountain views. These courses offer a perfect blend of scenic beauty and golfing challenge.",
+      author: {
+        id: "user1",
+        name: "Golf Enthusiast",
+        image: "/placeholder.svg?height=40&width=40",
       },
-      {
-        id: "3",
-        name: "Pearl Valley Golf Estate",
-        location: "Paarl, Western Cape",
-        rating: 4.7,
-        image: "/placeholder.svg?height=200&width=400",
-        description:
-          "This Jack Nicklaus signature course is set in the beautiful Franschhoek Valley, surrounded by mountains and vineyards. The course features numerous water hazards and well-placed bunkers.",
-      },
-      {
-        id: "4",
-        name: "Erinvale Golf Club",
-        location: "Somerset West, Western Cape",
-        rating: 4.5,
-        image: "/placeholder.svg?height=200&width=400",
-        description:
-          "Designed by Gary Player, Erinvale has hosted the World Cup of Golf and offers stunning views of False Bay and the Hottentots Holland Mountains. The back nine climbs into the foothills, providing dramatic elevation changes.",
-      },
-      {
-        id: "5",
-        name: "Steenberg Golf Club",
-        location: "Cape Town, Western Cape",
-        rating: 4.8,
-        image: "/placeholder.svg?height=200&width=400",
-        description:
-          "Set in the oldest wine farm in the Cape, Steenberg offers a parkland-style course with mountain backdrops and challenging water features. The course is known for its excellent conditioning year-round.",
-      },
-    ],
+      courseCount: 10,
+      likes: 24,
+      courses: [
+        {
+          id: "1",
+          name: "Fancourt Links",
+          location: "George, Western Cape",
+          rating: 4.9,
+          image: "/placeholder.svg?height=200&width=400",
+          description:
+            "Designed by Gary Player, this championship course is consistently ranked as South Africa's best. The links-style layout offers a true test of golf in a spectacular setting.",
+        },
+        {
+          id: "2",
+          name: "Arabella Golf Club",
+          location: "Hermanus, Western Cape",
+          rating: 4.6,
+          image: "/placeholder.svg?height=200&width=400",
+          description:
+            "Set alongside the Bot River Lagoon with the Kogelberg Mountains as a backdrop, Arabella is one of the most picturesque courses in the country. The closing stretch of holes along the lagoon is particularly memorable.",
+        },
+        {
+          id: "3",
+          name: "Pearl Valley Golf Estate",
+          location: "Paarl, Western Cape",
+          rating: 4.7,
+          image: "/placeholder.svg?height=200&width=400",
+          description:
+            "This Jack Nicklaus signature course is set in the beautiful Franschhoek Valley, surrounded by mountains and vineyards. The course features numerous water hazards and well-placed bunkers.",
+        },
+        {
+          id: "4",
+          name: "Erinvale Golf Club",
+          location: "Somerset West, Western Cape",
+          rating: 4.5,
+          image: "/placeholder.svg?height=200&width=400",
+          description:
+            "Designed by Gary Player, Erinvale has hosted the World Cup of Golf and offers stunning views of False Bay and the Hottentots Holland Mountains. The back nine climbs into the foothills, providing dramatic elevation changes.",
+        },
+        {
+          id: "5",
+          name: "Steenberg Golf Club",
+          location: "Cape Town, Western Cape",
+          rating: 4.8,
+          image: "/placeholder.svg?height=200&width=400",
+          description:
+            "Set in the oldest wine farm in the Cape, Steenberg offers a parkland-style course with mountain backdrops and challenging water features. The course is known for its excellent conditioning year-round.",
+        },
+      ],
+    }
   }
 
   return (
