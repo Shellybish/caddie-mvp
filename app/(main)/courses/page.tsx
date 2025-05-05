@@ -4,59 +4,36 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { StarRating } from "@/components/star-rating"
 import { MapPinIcon, SearchIcon } from "lucide-react"
+import { getAllCourses, getCourseReviews, getCourseAverageRating } from "@/lib/courses"
 
-export default function CoursesPage() {
-  // Mock data for courses
-  const courses = [
-    {
-      id: "1",
-      name: "Royal Johannesburg & Kensington Golf Club",
-      location: "Johannesburg, Gauteng",
-      rating: 4.5,
-      image: "/placeholder.svg?height=200&width=400",
-      reviewCount: 42,
-    },
-    {
-      id: "2",
-      name: "Durban Country Club",
-      location: "Durban, KwaZulu-Natal",
-      rating: 4.8,
-      image: "/placeholder.svg?height=200&width=400",
-      reviewCount: 36,
-    },
-    {
-      id: "3",
-      name: "Fancourt Links",
-      location: "George, Western Cape",
-      rating: 4.9,
-      image: "/placeholder.svg?height=200&width=400",
-      reviewCount: 51,
-    },
-    {
-      id: "4",
-      name: "Leopard Creek Country Club",
-      location: "Malelane, Mpumalanga",
-      rating: 4.9,
-      image: "/placeholder.svg?height=200&width=400",
-      reviewCount: 28,
-    },
-    {
-      id: "5",
-      name: "Gary Player Country Club",
-      location: "Sun City, North West",
-      rating: 4.7,
-      image: "/placeholder.svg?height=200&width=400",
-      reviewCount: 45,
-    },
-    {
-      id: "6",
-      name: "Arabella Golf Club",
-      location: "Hermanus, Western Cape",
-      rating: 4.6,
-      image: "/placeholder.svg?height=200&width=400",
-      reviewCount: 33,
-    },
-  ]
+export default async function CoursesPage() {
+  // Fetch real courses from Supabase
+  const courses = await getAllCourses();
+  
+  // Get ratings for each course - this would be better optimized with a single query
+  // but for now we'll fetch them individually
+  const enhancedCourses = await Promise.all(
+    courses.map(async (course) => {
+      try {
+        const reviews = await getCourseReviews(course.id);
+        const avgRating = await getCourseAverageRating(course.id);
+        return {
+          ...course,
+          rating: avgRating,
+          reviewCount: reviews.length,
+          image: "/placeholder.svg?height=200&width=400" // Placeholder image until we have real images
+        };
+      } catch (error) {
+        // Return default values if there's an error
+        return {
+          ...course,
+          rating: 0,
+          reviewCount: 0,
+          image: "/placeholder.svg?height=200&width=400"
+        };
+      }
+    })
+  );
 
   return (
     <div className="container py-8 md:py-12">
@@ -75,7 +52,7 @@ export default function CoursesPage() {
       </div>
 
       <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {courses.map((course) => (
+        {enhancedCourses.map((course) => (
           <Card key={course.id} className="overflow-hidden">
             <div className="aspect-video relative">
               <img src={course.image || "/placeholder.svg"} alt={course.name} className="object-cover w-full h-full" />

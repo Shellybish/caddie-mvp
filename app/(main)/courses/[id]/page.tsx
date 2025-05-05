@@ -15,15 +15,30 @@ type EnhancedCourse = Course & {
   images: string[];
 }
 
-export default async function CourseDetailPage({ params }: { params: { id: string } }) {
+type CourseDetailPageProps = {
+  params: {
+    id: string;
+  };
+}
+
+export default async function CourseDetailPage({ params }: CourseDetailPageProps) {
+  // Fix for Next.js warning about using params synchronously
+  const resolvedParams = await Promise.resolve(params);
+  const id = resolvedParams.id;
+  
+  console.log("Course ID from params:", id, typeof id);
+  
   // Try to fetch the course from the database
   let course: EnhancedCourse;
   
   try {
-    const dbCourse = await getCourseById(params.id);
+    console.log("Attempting to fetch course with ID:", id);
+    const dbCourse = await getCourseById(id);
+    console.log("Successfully fetched course:", dbCourse?.name || "Unknown");
+    
     // Get the review data
-    const reviews = await getCourseReviews(params.id);
-    const avgRating = await getCourseAverageRating(params.id);
+    const reviews = await getCourseReviews(id);
+    const avgRating = await getCourseAverageRating(id);
     
     // Transform to EnhancedCourse
     course = {
@@ -37,17 +52,34 @@ export default async function CourseDetailPage({ params }: { params: { id: strin
       ]
     };
   } catch (error) {
+    console.error("Error fetching course:", error);
+    
+    // Show more details about the error
+    if (error instanceof Error) {
+      console.error("Error message:", error.message);
+      console.error("Error stack:", error.stack);
+    }
+    
     // If course not found or error, use mock data as fallback
     course = {
-      id: params.id,
-      name: "Royal Johannesburg & Kensington Golf Club",
+      id: id,
+      name: "Royal Johannesburg & Kensington Golf Club (Fallback)",
       location: "Johannesburg, Gauteng",
       province: "Gauteng",
       address: "1 Fairway Ave, Linksfield North, Johannesburg, 2192",
+      postal_code: 2192,
       phone: "+27 11 640 3021",
+      email: "info@royaljk.co.za",
       website: "https://www.royaljk.co.za",
       description:
         "Royal Johannesburg & Kensington Golf Club is one of the most prestigious golf clubs in South Africa. The East Course, designed by Robert Grimsdell, is a championship layout that has hosted multiple South African Opens. The course features tree-lined fairways, strategic bunkering, and challenging greens that test golfers of all abilities.",
+      num_holes: 18,
+      designer: "Robert Grimsdell",
+      year_established: 1890,
+      green_fee_range: "R500 - R1,500",
+      slope_rating: 138,
+      course_code: "RJK01",
+      municipality: "City of Johannesburg",
       rating: 4.5,
       reviewCount: 42,
       images: [
@@ -122,6 +154,48 @@ export default async function CourseDetailPage({ params }: { params: { id: strin
                 <div>
                   <h2 className="text-xl font-bold mb-3">About the Course</h2>
                   <p className="text-muted-foreground">{course.description}</p>
+                  
+                  {/* Additional Course Information */}
+                  {(course.designer || course.year_established || course.num_holes || course.green_fee_range) && (
+                    <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {course.designer && (
+                        <div className="flex items-center">
+                          <span className="font-medium mr-2">Designer:</span>
+                          <span className="text-muted-foreground">{course.designer}</span>
+                        </div>
+                      )}
+                      {course.year_established && (
+                        <div className="flex items-center">
+                          <span className="font-medium mr-2">Established:</span>
+                          <span className="text-muted-foreground">{course.year_established}</span>
+                        </div>
+                      )}
+                      {course.num_holes && (
+                        <div className="flex items-center">
+                          <span className="font-medium mr-2">Holes:</span>
+                          <span className="text-muted-foreground">{course.num_holes}</span>
+                        </div>
+                      )}
+                      {course.green_fee_range && (
+                        <div className="flex items-center">
+                          <span className="font-medium mr-2">Green Fees:</span>
+                          <span className="text-muted-foreground">{course.green_fee_range}</span>
+                        </div>
+                      )}
+                      {course.slope_rating && (
+                        <div className="flex items-center">
+                          <span className="font-medium mr-2">Slope Rating:</span>
+                          <span className="text-muted-foreground">{course.slope_rating}</span>
+                        </div>
+                      )}
+                      {course.course_code && (
+                        <div className="flex items-center">
+                          <span className="font-medium mr-2">Course Code:</span>
+                          <span className="text-muted-foreground">{course.course_code}</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 <div>
@@ -129,23 +203,45 @@ export default async function CourseDetailPage({ params }: { params: { id: strin
                   <div className="space-y-2">
                     <div className="flex items-start">
                       <MapPinIcon className="h-5 w-5 mr-2 text-muted-foreground shrink-0 mt-0.5" />
-                      <span>{course.address}</span>
+                      <span>
+                        {course.address}
+                        {course.postal_code && course.address && <>, {course.postal_code}</>}
+                        {!course.address && "Address not available"}
+                      </span>
                     </div>
-                    <div className="flex items-center">
-                      <PhoneIcon className="h-5 w-5 mr-2 text-muted-foreground" />
-                      <span>{course.phone}</span>
-                    </div>
-                    <div className="flex items-center">
-                      <GlobeIcon className="h-5 w-5 mr-2 text-muted-foreground" />
-                      <a
-                        href={course.website || "#"}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-primary hover:underline"
-                      >
-                        {course.website?.replace(/^https?:\/\//, "") || "Website not available"}
-                      </a>
-                    </div>
+                    {course.phone && (
+                      <div className="flex items-center">
+                        <PhoneIcon className="h-5 w-5 mr-2 text-muted-foreground" />
+                        <span>{course.phone}</span>
+                      </div>
+                    )}
+                    {course.email && (
+                      <div className="flex items-center">
+                        <svg className="h-5 w-5 mr-2 text-muted-foreground" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
+                          <polyline points="22,6 12,13 2,6"></polyline>
+                        </svg>
+                        <a href={`mailto:${course.email}`} className="text-primary hover:underline">
+                          {course.email}
+                        </a>
+                      </div>
+                    )}
+                    {course.website && (
+                      <div className="flex items-center">
+                        <GlobeIcon className="h-5 w-5 mr-2 text-muted-foreground" />
+                        <a
+                          href={course.website.startsWith('http') ? course.website : `https://${course.website}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-primary hover:underline"
+                        >
+                          {course.website.replace(/^https?:\/\//, "")}
+                        </a>
+                      </div>
+                    )}
+                    {(!course.phone && !course.website && !course.email) && (
+                      <div className="text-muted-foreground">No contact information available</div>
+                    )}
                   </div>
                 </div>
               </TabsContent>

@@ -13,6 +13,15 @@ export type Course = {
   phone?: string;
   website?: string;
   created_at: string;
+  postal_code?: number;
+  email?: string;
+  num_holes?: number;
+  designer?: string;
+  year_established?: number;
+  green_fee_range?: string;
+  slope_rating?: number;
+  course_code?: string;
+  municipality?: string;
 };
 
 export type CourseReview = {
@@ -38,14 +47,41 @@ export async function getAllCourses() {
 
 // Fetch a course by ID
 export async function getCourseById(id: string) {
-  const { data, error } = await supabase
-    .from('courses')
-    .select('*')
-    .eq('id', id)
-    .single();
-  
-  if (error) throw error;
-  return data as Course;
+  try {
+    console.log("getCourseById called with:", id, typeof id);
+    
+    if (!id) {
+      console.error("Invalid course ID: empty or undefined");
+      throw new Error("Invalid course ID: empty or undefined");
+    }
+    
+    // UUID should be formatted as a string
+    const cleanId = id.toString().trim();
+    console.log("Using cleaned ID:", cleanId);
+    
+    const { data, error } = await supabase
+      .from('courses')
+      .select('*')
+      .eq('id', cleanId)
+      .single();
+    
+    console.log("Supabase response:", { data: !!data ? "exists" : "null", error: error ? "error" : "none" });
+    
+    if (error) {
+      console.error(`Error fetching course with ID ${cleanId}:`, error);
+      throw error;
+    }
+    
+    if (!data) {
+      console.error(`Course with ID ${cleanId} not found`);
+      throw new Error(`Course with ID ${cleanId} not found`);
+    }
+    
+    return data as Course;
+  } catch (err) {
+    console.error(`Exception in getCourseById(${id}):`, err);
+    throw err;
+  }
 }
 
 // Search courses
@@ -92,17 +128,25 @@ export async function logPlayAndReview(courseId: string, userId: string, rating:
 
 // Get reviews for a course
 export async function getCourseReviews(courseId: string) {
-  const { data, error } = await supabase
-    .from('course_reviews')
-    .select(`
-      *,
-      profiles:user_id (username, avatar_url)
-    `)
-    .eq('course_id', courseId)
-    .order('created_at', { ascending: false });
-  
-  if (error) throw error;
-  return data;
+  try {
+    // First try querying without the profiles join
+    const { data, error } = await supabase
+      .from('course_reviews')
+      .select('*')
+      .eq('course_id', courseId)
+      .order('created_at', { ascending: false });
+    
+    if (error) {
+      console.error(`Error fetching reviews for course ${courseId}:`, error);
+      throw error;
+    }
+    
+    return data || [];
+  } catch (err) {
+    console.error(`Exception in getCourseReviews(${courseId}):`, err);
+    // Return empty array instead of throwing to prevent the entire page from failing
+    return [];
+  }
 }
 
 // Get average rating for a course
