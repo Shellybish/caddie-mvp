@@ -1,6 +1,8 @@
 "use client"
 
+import { useEffect, useState } from "react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -15,96 +17,138 @@ import {
   Settings2Icon,
   ThumbsUpIcon,
   UserIcon,
+  BookmarkIcon,
+  BarChart2Icon,
 } from "lucide-react"
+import { useUser } from "@/contexts/user-context"
+import { getProfileById, getUserStats, getFavoriteCourses, getBucketListCourses } from "@/lib/api/profiles"
+import { getUserReviews } from "@/lib/api/courses"
+
+// Define types for the reviews
+interface UserReview {
+  id: string;
+  course_id: string;
+  rating: number;
+  review_text?: string;
+  date_played: string;
+  created_at: string;
+  likes_count: number;
+  course: {
+    id: string;
+    name: string;
+    location: string;
+    province: string;
+  } | null;
+}
 
 export default function ProfilePage() {
-  // Mock user data
-  const user = {
-    id: "user1",
-    name: "John Smith",
-    username: "golfenthusiast",
-    location: "Cape Town, Western Cape",
-    bio: "Avid golfer with a passion for discovering new courses. Currently playing off a 12 handicap and working to get it lower. Love links-style courses and challenging layouts.",
-    image: "/placeholder.svg?height=200&width=200",
-    stats: {
-      coursesPlayed: 42,
-      reviews: 28,
-      lists: 5,
-      followers: 124,
-      following: 87,
-    },
+  const { user, isLoading: isUserLoading } = useUser()
+  const router = useRouter()
+  
+  const [stats, setStats] = useState({
+    coursesPlayed: 0,
+    reviews: 0,
+    lists: 0,
+    followers: 0,
+    following: 0
+  })
+  const [isLoading, setIsLoading] = useState(true)
+  const [userReviews, setUserReviews] = useState<UserReview[]>([])
+  const [recentPlays, setRecentPlays] = useState<UserReview[]>([])
+  const [favoriteCourses, setFavoriteCourses] = useState<any[]>([])
+  const [bucketListCourses, setBucketListCourses] = useState<any[]>([])
+  const [ratingDistribution, setRatingDistribution] = useState<number[]>([0, 0, 0, 0, 0])
+  
+  // Fetch user stats and reviews when the user is loaded
+  useEffect(() => {
+    const fetchUserData = async () => {
+      if (!user?.id) return
+      
+      try {
+        setIsLoading(true)
+        console.log(`Fetching data for user ${user.id}`)
+        
+        // Get user stats first 
+        const userStats = await getUserStats(user.id)
+        console.log("User stats:", userStats)
+        setStats(userStats)
+        
+        // Get user reviews
+        console.log("Fetching user reviews...")
+        const reviews = await getUserReviews(user.id)
+        console.log(`Received ${reviews.length} reviews from API`)
+        
+        if (reviews && Array.isArray(reviews)) {
+          setUserReviews(reviews)
+          
+          // Use the same data for recent plays (only take most recent 3)
+          const recentOnes = [...reviews].sort((a, b) => 
+            new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+          ).slice(0, 3)
+          
+          setRecentPlays(recentOnes)
+          console.log(`Set ${recentOnes.length} recent plays`)
+          
+          // Calculate rating distribution
+          const distribution = [0, 0, 0, 0, 0]
+          reviews.forEach(review => {
+            if (review.rating >= 1 && review.rating <= 5) {
+              distribution[review.rating - 1]++
+            }
+          })
+          setRatingDistribution(distribution)
+        } else {
+          console.error("Reviews is not an array:", reviews)
+          setUserReviews([])
+          setRecentPlays([])
+        }
+
+        // Get favorite courses
+        console.log("Fetching favorite courses...")
+        const favorites = await getFavoriteCourses(user.id)
+        console.log(`Received ${favorites.length} favorite courses`)
+        setFavoriteCourses(favorites)
+
+        // Get bucket list courses
+        console.log("Fetching bucket list courses...")
+        const bucketList = await getBucketListCourses(user.id)
+        console.log(`Received ${bucketList.length} bucket list courses`)
+        setBucketListCourses(bucketList)
+      } catch (error) {
+        console.error("Error fetching user data:", error)
+        setUserReviews([])
+        setRecentPlays([])
+        setFavoriteCourses([])
+        setBucketListCourses([])
+      } finally {
+        setIsLoading(false)
+      }
+    }
+    
+    if (user) {
+      fetchUserData()
+    } else if (!isUserLoading) {
+      // If we're not loading and there's no user, redirect to login
+      router.push("/login")
+    }
+  }, [user, isUserLoading, router])
+  
+  // Redirect to login if no user is logged in
+  if (!isUserLoading && !user) {
+    router.push("/login")
+    return null
   }
-
-  // Mock recent plays
-  const recentPlays = [
-    {
-      id: "1",
-      course: {
-        id: "course1",
-        name: "Fancourt Links",
-        location: "George, Western Cape",
-        image: "/placeholder.svg?height=100&width=100",
-      },
-      date: "2023-11-15",
-      rating: 4.5,
-    },
-    {
-      id: "2",
-      course: {
-        id: "course2",
-        name: "Arabella Golf Club",
-        location: "Hermanus, Western Cape",
-        image: "/placeholder.svg?height=100&width=100",
-      },
-      date: "2023-10-28",
-      rating: 4.0,
-    },
-    {
-      id: "3",
-      course: {
-        id: "course3",
-        name: "Royal Johannesburg & Kensington Golf Club",
-        location: "Johannesburg, Gauteng",
-        image: "/placeholder.svg?height=100&width=100",
-      },
-      date: "2023-10-05",
-      rating: 4.5,
-    },
-  ]
-
-  // Mock reviews
-  const reviews = [
-    {
-      id: "1",
-      course: {
-        id: "course1",
-        name: "Fancourt Links",
-        location: "George, Western Cape",
-        image: "/placeholder.svg?height=100&width=100",
-      },
-      date: "2023-11-15",
-      rating: 4.5,
-      content:
-        "Absolutely stunning course with amazing views. The condition was impeccable and the staff were incredibly friendly. The par 3s are particularly challenging and memorable. Will definitely be back!",
-      likes: 12,
-    },
-    {
-      id: "2",
-      course: {
-        id: "course2",
-        name: "Arabella Golf Club",
-        location: "Hermanus, Western Cape",
-        image: "/placeholder.svg?height=100&width=100",
-      },
-      date: "2023-10-28",
-      rating: 4.0,
-      content:
-        "Great layout and excellent condition. The greens were rolling perfectly, though the bunkers were a bit inconsistent. The clubhouse facilities are top-notch and the food was excellent. A must-play if you're in the area.",
-      likes: 8,
-    },
-  ]
-
-  // Mock lists
+  
+  // Show loading while user data is being fetched
+  if (isUserLoading || isLoading) {
+    return (
+      <div className="container py-8 md:py-12 flex justify-center items-center min-h-[60vh]">
+        <p>Loading profile...</p>
+      </div>
+    )
+  }
+  
+  // Mock lists - would be replaced with actual API calls
   const lists = [
     {
       id: "1",
@@ -140,16 +184,21 @@ export default function ProfilePage() {
           <Card>
             <CardContent className="p-6 flex flex-col items-center text-center">
               <Avatar className="h-24 w-24 mb-4">
-                <AvatarImage src={user.image || "/placeholder.svg"} alt={user.name} />
-                <AvatarFallback>{user.name.substring(0, 2).toUpperCase()}</AvatarFallback>
+                <AvatarImage src={user?.image || "/placeholder.svg"} alt={user?.name} />
+                <AvatarFallback>{user?.name.substring(0, 2).toUpperCase()}</AvatarFallback>
               </Avatar>
-              <h1 className="text-xl font-bold">{user.name}</h1>
-              <p className="text-sm text-muted-foreground mb-2">@{user.username}</p>
-              <div className="flex items-center text-sm text-muted-foreground mb-4">
-                <MapPinIcon className="h-3.5 w-3.5 mr-1" />
-                <span>{user.location}</span>
-              </div>
-              <p className="text-sm mb-4">{user.bio}</p>
+              <h1 className="text-xl font-bold">{user?.name}</h1>
+              <p className="text-sm text-muted-foreground mb-2">
+                <Link href={`/user/${user?.name}`} className="hover:underline">
+                  @{user?.name}
+                </Link>
+              </p>
+              {user?.location && (
+                <div className="flex items-center text-sm text-muted-foreground mb-4">
+                  <MapPinIcon className="h-3.5 w-3.5 mr-1" />
+                  <span>{user.location}</span>
+                </div>
+              )}
               <div className="grid grid-cols-2 gap-4 w-full">
                 <Button asChild variant="outline" className="w-full">
                   <Link href="/profile/edit">
@@ -169,14 +218,14 @@ export default function ProfilePage() {
 
           <Card>
             <CardContent className="p-4">
-              <h2 className="font-medium mb-3">Stats</h2>
+              <h2 className="font-medium mb-3">The Scorecard</h2>
               <div className="grid grid-cols-2 gap-y-4">
                 <div className="flex flex-col items-center">
                   <div className="flex items-center justify-center w-10 h-10 rounded-full bg-primary/10 text-primary mb-1">
                     <GolfIcon className="h-5 w-5" />
                   </div>
-                  <p className="font-medium">{user.stats.coursesPlayed}</p>
-                  <p className="text-xs text-muted-foreground">Courses Played</p>
+                  <p className="font-medium">{stats.coursesPlayed}</p>
+                  <p className="text-xs text-muted-foreground">Courses</p>
                 </div>
                 <div className="flex flex-col items-center">
                   <div className="flex items-center justify-center w-10 h-10 rounded-full bg-primary/10 text-primary mb-1">
@@ -197,21 +246,21 @@ export default function ProfilePage() {
                       <path d="M17 12H7" />
                     </svg>
                   </div>
-                  <p className="font-medium">{user.stats.reviews}</p>
+                  <p className="font-medium">{stats.reviews}</p>
                   <p className="text-xs text-muted-foreground">Reviews</p>
                 </div>
                 <div className="flex flex-col items-center">
                   <div className="flex items-center justify-center w-10 h-10 rounded-full bg-primary/10 text-primary mb-1">
                     <ListIcon className="h-5 w-5" />
                   </div>
-                  <p className="font-medium">{user.stats.lists}</p>
-                  <p className="text-xs text-muted-foreground">Lists</p>
+                  <p className="font-medium">{stats.following}</p>
+                  <p className="text-xs text-muted-foreground">Following</p>
                 </div>
                 <div className="flex flex-col items-center">
                   <div className="flex items-center justify-center w-10 h-10 rounded-full bg-primary/10 text-primary mb-1">
                     <UserIcon className="h-5 w-5" />
                   </div>
-                  <p className="font-medium">{user.stats.followers}</p>
+                  <p className="font-medium">{stats.followers}</p>
                   <p className="text-xs text-muted-foreground">Followers</p>
                 </div>
               </div>
@@ -221,129 +270,329 @@ export default function ProfilePage() {
 
         {/* Main Content */}
         <div className="flex-1">
-          <Tabs defaultValue="plays">
+          <Tabs defaultValue="profile">
             <TabsList className="mb-6">
+              <TabsTrigger value="profile">Profile</TabsTrigger>
               <TabsTrigger value="plays">Plays</TabsTrigger>
               <TabsTrigger value="reviews">Reviews</TabsTrigger>
               <TabsTrigger value="lists">Lists</TabsTrigger>
               <TabsTrigger value="following">Following</TabsTrigger>
             </TabsList>
 
-            <TabsContent value="plays" className="space-y-6">
-              <div className="flex items-center justify-between">
-                <h2 className="text-xl font-bold">Recent Plays</h2>
-                <Button asChild variant="outline">
-                  <Link href="/courses">Log New Play</Link>
-                </Button>
-              </div>
+            <TabsContent value="profile" className="space-y-6">
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {/* Favorite Courses Section */}
+                <div className="lg:col-span-2 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h2 className="text-xl font-bold">Favorite Courses</h2>
+                    <Button asChild variant="outline" size="sm">
+                      <Link href="/courses">Find Courses</Link>
+                    </Button>
+                  </div>
+                  
+                  {isLoading ? (
+                    <div className="py-8 text-center">
+                      <p className="text-muted-foreground mb-4">Loading favorite courses...</p>
+                    </div>
+                  ) : favoriteCourses && favoriteCourses.length > 0 ? (
+                    <div className="grid grid-cols-2 gap-4">
+                      {favoriteCourses.slice(0, 4).map((favorite) => (
+                        <Card key={favorite.id} className="overflow-hidden">
+                          <CardContent className="p-0">
+                            <div className="h-32 bg-muted">
+                              <img 
+                                src="/placeholder.svg?height=200&width=300" 
+                                alt={favorite.courses?.name || "Golf Course"} 
+                                className="w-full h-full object-cover" 
+                              />
+                            </div>
+                            <div className="p-4">
+                              <h3 className="font-medium truncate">
+                                <Link href={`/courses/${favorite.course_id}`} className="hover:underline">
+                                  {favorite.courses?.name || "Unknown Course"}
+                                </Link>
+                              </h3>
+                              <p className="text-sm text-muted-foreground">
+                                {favorite.courses?.location || "Unknown Location"}
+                              </p>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="py-8 text-center">
+                      <p className="text-muted-foreground mb-4">You haven't added any favorite courses yet.</p>
+                      <Button asChild>
+                        <Link href="/courses">Explore Courses</Link>
+                      </Button>
+                    </div>
+                  )}
 
-              <div className="space-y-4">
-                {recentPlays.map((play) => (
-                  <Card key={play.id} className="overflow-hidden">
-                    <CardContent className="p-0">
-                      <div className="flex">
-                        <div className="w-24 h-24 shrink-0">
-                          <img
-                            src={play.course.image || "/placeholder.svg"}
-                            alt={play.course.name}
-                            className="w-full h-full object-cover"
-                          />
-                        </div>
-                        <div className="p-4 flex-1">
-                          <div className="flex items-start justify-between">
-                            <div>
-                              <h3 className="font-medium line-clamp-1">{play.course.name}</h3>
-                              <div className="flex items-center text-sm text-muted-foreground">
-                                <MapPinIcon className="h-3.5 w-3.5 mr-1" />
-                                <span>{play.course.location}</span>
+                  {/* Recently Played Section */}
+                  <div className="pt-6">
+                    <div className="flex items-center justify-between">
+                      <h2 className="text-xl font-bold">Recently Played</h2>
+                      <Button asChild variant="outline" size="sm">
+                        <Link href="/courses">Find a Course</Link>
+                      </Button>
+                    </div>
+                    
+                    {isLoading ? (
+                      <div className="py-8 text-center">
+                        <p className="text-muted-foreground mb-4">Loading your rounds...</p>
+                      </div>
+                    ) : recentPlays && recentPlays.length > 0 ? (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                        {recentPlays.map((play) => (
+                          <Card key={play.id}>
+                            <CardContent className="p-4">
+                              <div className="flex items-center gap-4">
+                                <div className="w-16 h-16 rounded-md overflow-hidden bg-muted">
+                                  <img 
+                                    src="/placeholder.svg?height=100&width=100" 
+                                    alt={play.course?.name || "Golf Course"} 
+                                    className="w-full h-full object-cover" 
+                                  />
+                                </div>
+                                <div className="flex-1">
+                                  <h3 className="font-medium">
+                                    <Link href={`/courses/${play.course_id}`} className="hover:underline">
+                                      {play.course?.name || "Unknown Course"}
+                                    </Link>
+                                  </h3>
+                                  <p className="text-sm text-muted-foreground">
+                                    {play.course?.location || "Unknown Location"}
+                                  </p>
+                                  <div className="flex items-center mt-1">
+                                    <StarRating rating={play.rating} />
+                                    <span className="text-sm text-muted-foreground ml-2">
+                                      {new Date(play.date_played).toLocaleDateString()}
+                                    </span>
+                                  </div>
+                                </div>
                               </div>
+                            </CardContent>
+                          </Card>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="py-8 text-center">
+                        <p className="text-muted-foreground mb-4">You haven't logged any rounds yet.</p>
+                        <Button asChild>
+                          <Link href="/courses">Find a Course to Play</Link>
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Right Side - Stats and Bucket List */}
+                <div className="space-y-6">
+                  {/* Rating Distribution */}
+                  <Card>
+                    <CardContent className="p-4">
+                      <h3 className="font-medium mb-4 flex items-center">
+                        <BarChart2Icon className="h-4 w-4 mr-2" />
+                        Rating Distribution
+                      </h3>
+                      <div className="space-y-2">
+                        {ratingDistribution.map((count, index) => {
+                          const percentage = userReviews.length > 0 
+                            ? Math.round((count / userReviews.length) * 100) 
+                            : 0;
+                          
+                          return (
+                            <div key={index} className="flex items-center gap-2">
+                              <div className="flex items-center w-12">
+                                <span className="text-xs text-muted-foreground">{index + 1}</span>
+                                <StarRating rating={index + 1} className="ml-1 scale-75" />
+                              </div>
+                              <div className="flex-1 h-2 bg-muted overflow-hidden rounded-full">
+                                <div 
+                                  className="h-full bg-primary" 
+                                  style={{ width: `${percentage}%` }}
+                                ></div>
+                              </div>
+                              <span className="text-xs text-muted-foreground w-8 text-right">{count}</span>
                             </div>
-                            <div className="flex items-center text-sm text-muted-foreground">
-                              <CalendarIcon className="h-3.5 w-3.5 mr-1" />
-                              <span>{new Date(play.date).toLocaleDateString()}</span>
-                            </div>
-                          </div>
-                          <div className="flex items-center mt-2">
-                            <StarRating rating={play.rating} />
-                          </div>
-                          <div className="flex justify-between items-center mt-2">
-                            <Button asChild variant="outline" size="sm">
-                              <Link href={`/courses/${play.course.id}`}>View Course</Link>
-                            </Button>
-                            <Button asChild className="btn-navy" size="sm">
-                              <Link href={`/courses/${play.course.id}/review`}>Write Review</Link>
-                            </Button>
-                          </div>
-                        </div>
+                          );
+                        })}
+                      </div>
+                      <div className="mt-2 text-xs text-muted-foreground text-right">
+                        {userReviews.length} ratings total
                       </div>
                     </CardContent>
                   </Card>
-                ))}
+
+                  {/* Bucket List */}
+                  <Card>
+                    <CardContent className="p-4">
+                      <h3 className="font-medium mb-4 flex items-center">
+                        <BookmarkIcon className="h-4 w-4 mr-2" />
+                        Bucket List
+                      </h3>
+                      
+                      {isLoading ? (
+                        <div className="py-4 text-center">
+                          <p className="text-sm text-muted-foreground">Loading bucket list...</p>
+                        </div>
+                      ) : bucketListCourses && bucketListCourses.length > 0 ? (
+                        <div className="space-y-3">
+                          {bucketListCourses.slice(0, 5).map((course) => (
+                            <div key={course.id} className="flex items-center gap-3">
+                              <div className="w-12 h-12 rounded overflow-hidden bg-muted">
+                                <img 
+                                  src="/placeholder.svg?height=50&width=50" 
+                                  alt={course.courses?.name || "Golf Course"} 
+                                  className="w-full h-full object-cover" 
+                                />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <h4 className="font-medium text-sm truncate">
+                                  <Link href={`/courses/${course.course_id}`} className="hover:underline">
+                                    {course.courses?.name || "Unknown Course"}
+                                  </Link>
+                                </h4>
+                                <p className="text-xs text-muted-foreground truncate">
+                                  {course.courses?.location || "Unknown Location"}
+                                </p>
+                              </div>
+                            </div>
+                          ))}
+                          
+                          {bucketListCourses.length > 5 && (
+                            <Button variant="outline" size="sm" className="w-full mt-2">
+                              View All ({bucketListCourses.length})
+                            </Button>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="py-4 text-center">
+                          <p className="text-sm text-muted-foreground mb-2">Your bucket list is empty.</p>
+                          <Button asChild size="sm">
+                            <Link href="/courses">Explore Courses</Link>
+                          </Button>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                </div>
+              </div>
+            </TabsContent>
+
+            <TabsContent value="plays" className="space-y-6">
+              <div className="flex items-center justify-between">
+                <h2 className="text-xl font-bold">Recent Rounds</h2>
+                <Button asChild variant="outline">
+                  <Link href="/courses">Find a Course</Link>
+                </Button>
               </div>
 
-              <div className="flex justify-center">
-                <Button variant="outline">View All Plays</Button>
-              </div>
+              {isLoading ? (
+                <div className="py-8 text-center">
+                  <p className="text-muted-foreground mb-4">Loading your rounds...</p>
+                </div>
+              ) : recentPlays && recentPlays.length > 0 ? (
+                <div className="space-y-4">
+                  {recentPlays.map((play) => (
+                    <Card key={play.id}>
+                      <CardContent className="p-4">
+                        <div className="flex items-center gap-4">
+                          <div className="w-16 h-16 rounded-md overflow-hidden bg-muted">
+                            <img 
+                              src="/placeholder.svg?height=100&width=100" 
+                              alt={play.course?.name || "Golf Course"} 
+                              className="w-full h-full object-cover" 
+                            />
+                          </div>
+                          <div className="flex-1">
+                            <h3 className="font-medium">
+                              <Link href={`/courses/${play.course_id}`} className="hover:underline">
+                                {play.course?.name || "Unknown Course"}
+                              </Link>
+                            </h3>
+                            <p className="text-sm text-muted-foreground">
+                              {play.course?.location || "Unknown Location"}
+                            </p>
+                            <div className="flex items-center mt-1">
+                              <StarRating rating={play.rating} />
+                              <span className="text-sm text-muted-foreground ml-2">
+                                Played on {new Date(play.date_played).toLocaleDateString()}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              ) : (
+                <div className="py-8 text-center">
+                  <p className="text-muted-foreground mb-4">You haven't logged any rounds yet.</p>
+                  <Button asChild>
+                    <Link href="/courses">Find a Course to Play</Link>
+                  </Button>
+                </div>
+              )}
             </TabsContent>
 
             <TabsContent value="reviews" className="space-y-6">
               <div className="flex items-center justify-between">
-                <h2 className="text-xl font-bold">Reviews</h2>
+                <h2 className="text-xl font-bold">My Reviews</h2>
+                <Button asChild variant="outline">
+                  <Link href="/courses">Find a Course</Link>
+                </Button>
               </div>
 
-              <div className="space-y-4">
-                {reviews.map((review) => (
-                  <Card key={review.id} className="p-4">
-                    <div className="space-y-3">
-                      <div className="flex items-start justify-between">
-                        <div className="flex items-start gap-3">
-                          <div className="w-16 h-12 rounded overflow-hidden shrink-0">
-                            <img
-                              src={review.course.image || "/placeholder.svg"}
-                              alt={review.course.name}
-                              className="w-full h-full object-cover"
-                            />
+              {isLoading ? (
+                <div className="py-8 text-center">
+                  <p className="text-muted-foreground mb-4">Loading your reviews...</p>
+                </div>
+              ) : userReviews && userReviews.length > 0 ? (
+                <div className="space-y-4">
+                  {userReviews
+                    .filter(review => review.review_text && review.review_text.trim() !== '')
+                    .map((review) => (
+                      <Card key={review.id}>
+                        <CardContent className="p-6">
+                          <h3 className="font-medium mb-1">
+                            <Link href={`/courses/${review.course_id}`} className="hover:underline">
+                              {review.course?.name || "Unknown Course"}
+                            </Link>
+                          </h3>
+                          <p className="text-sm text-muted-foreground mb-2">
+                            {review.course?.location || "Unknown Location"}
+                          </p>
+                          <div className="flex items-center mb-3">
+                            <StarRating rating={review.rating} />
+                            <span className="text-sm text-muted-foreground ml-2">
+                              Played on {new Date(review.date_played).toLocaleDateString()}
+                            </span>
                           </div>
-                          <div>
-                            <h3 className="font-medium">{review.course.name}</h3>
-                            <div className="flex items-center text-sm text-muted-foreground">
-                              <MapPinIcon className="h-3.5 w-3.5 mr-1" />
-                              <span>{review.course.location}</span>
-                            </div>
+                          <p className="text-sm mb-3">{review.review_text || "No review text provided."}</p>
+                          <div className="flex items-center text-sm text-muted-foreground">
+                            <ThumbsUpIcon className="h-4 w-4 mr-1" />
+                            <span>{review.likes_count} likes</span>
                           </div>
-                        </div>
-                        <div className="flex items-center text-sm text-muted-foreground">
-                          <CalendarIcon className="h-3.5 w-3.5 mr-1" />
-                          <span>{new Date(review.date).toLocaleDateString()}</span>
-                        </div>
-                      </div>
-                      <div className="flex items-center">
-                        <StarRating rating={review.rating} />
-                      </div>
-                      <p className="text-sm">{review.content}</p>
-                      <div className="flex justify-between items-center">
-                        <Button asChild variant="outline" size="sm">
-                          <Link href={`/courses/${review.course.id}`}>View Course</Link>
-                        </Button>
-                        <div className="flex items-center text-sm text-muted-foreground">
-                          <ThumbsUpIcon className="h-3.5 w-3.5 mr-1" />
-                          <span>{review.likes} likes</span>
-                        </div>
-                      </div>
-                    </div>
-                  </Card>
-                ))}
-              </div>
-
-              <div className="flex justify-center">
-                <Button variant="outline">View All Reviews</Button>
-              </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                </div>
+              ) : (
+                <div className="py-8 text-center">
+                  <p className="text-muted-foreground mb-4">You haven't written any reviews yet.</p>
+                  <Button asChild>
+                    <Link href="/courses">Find a Course to Review</Link>
+                  </Button>
+                </div>
+              )}
             </TabsContent>
 
             <TabsContent value="lists" className="space-y-6">
               <div className="flex items-center justify-between">
                 <h2 className="text-xl font-bold">Lists</h2>
-                <Button asChild>
+                <Button asChild variant="outline">
                   <Link href="/lists/create">Create New List</Link>
                 </Button>
               </div>

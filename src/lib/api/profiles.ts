@@ -82,6 +82,20 @@ export async function getProfileById(userId: string) {
   return data as Profile;
 }
 
+// Get a user profile by username
+export async function getProfileByUsername(username: string) {
+  if (!username) throw new Error('Username is required');
+  
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('*')
+    .ilike('username', username)
+    .single();
+    
+  if (error) throw error;
+  return data as Profile;
+}
+
 // Create a new list
 export async function createList(userId: string, title: string, description?: string, isPublic: boolean = true) {
   const { data, error } = await supabase
@@ -261,4 +275,364 @@ export async function getFollowing(userId: string) {
     
   if (error) throw error;
   return data;
+}
+
+// Check if a username is available
+export async function checkUsernameAvailability(username: string): Promise<boolean> {
+  try {
+    if (!username || username.trim() === '') {
+      throw new Error('Username is required');
+    }
+    
+    // Normalize the username to lowercase for case-insensitive comparison
+    const normalizedUsername = username.trim().toLowerCase();
+    
+    // Query the database to check if the username already exists
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('username')
+      .ilike('username', normalizedUsername)
+      .limit(1);
+    
+    if (error) {
+      console.error('Error checking username availability:', error);
+      throw error;
+    }
+    
+    // If data exists and has length > 0, username is taken
+    return !data || data.length === 0;
+  } catch (error) {
+    console.error('Error in checkUsernameAvailability:', error);
+    throw error;
+  }
+}
+
+// Search for users by username
+export async function searchUsersByUsername(query: string, limit: number = 10) {
+  try {
+    if (!query || query.trim() === '') {
+      return [];
+    }
+    
+    const normalizedQuery = query.trim().toLowerCase();
+    
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('id, user_id, username, avatar_url')
+      .ilike('username', `%${normalizedQuery}%`)
+      .limit(limit);
+    
+    if (error) {
+      console.error('Error searching users by username:', error);
+      throw error;
+    }
+    
+    return data || [];
+  } catch (error) {
+    console.error('Error in searchUsersByUsername:', error);
+    throw error;
+  }
+}
+
+// Get user stats (counts for plays, reviews, lists, followers, following)
+export async function getUserStats(userId: string) {
+  try {
+    if (!userId) throw new Error('User ID is required');
+    
+    // Get counts for various stats
+    const [
+      { count: coursesPlayed },
+      { count: reviews },
+      { count: lists },
+      { count: followers },
+      { count: following }
+    ] = await Promise.all([
+      // Count plays
+      supabase
+        .from('course_reviews')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', userId),
+      
+      // Count reviews (reviews with text content)
+      supabase
+        .from('course_reviews')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', userId)
+        .not('review_text', 'is', null),
+      
+      // Count lists
+      supabase
+        .from('lists')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', userId),
+      
+      // Count followers
+      supabase
+        .from('follows')
+        .select('*', { count: 'exact', head: true })
+        .eq('following_id', userId),
+      
+      // Count following
+      supabase
+        .from('follows')
+        .select('*', { count: 'exact', head: true })
+        .eq('follower_id', userId)
+    ]);
+    
+    return {
+      coursesPlayed: coursesPlayed || 0,
+      reviews: reviews || 0,
+      lists: lists || 0,
+      followers: followers || 0,
+      following: following || 0
+    };
+  } catch (error) {
+    console.error('Error getting user stats:', error);
+    // Return default values if there's an error
+    return { coursesPlayed: 0, reviews: 0, lists: 0, followers: 0, following: 0 };
+  }
+}
+
+// Check if a user is following another user
+export async function isFollowing(followerId: string, followingId: string): Promise<boolean> {
+  try {
+    if (!followerId || !followingId) {
+      return false;
+    }
+    
+    const { data, error } = await supabase
+      .from('follows')
+      .select('id')
+      .eq('follower_id', followerId)
+      .eq('following_id', followingId)
+      .single();
+    
+    // If there's data, then the follow relationship exists
+    return !!data;
+  } catch (error) {
+    // If single() throws error because no record found, the user is not following
+    return false;
+  }
+}
+
+// Favorite Courses API functions
+
+// Get favorite courses for a user
+export async function getFavoriteCourses(userId: string) {
+  try {
+    if (!userId) throw new Error('User ID is required');
+    
+    const { data, error } = await supabase
+      .from('favorite_courses')
+      .select(`
+        id,
+        course_id,
+        position,
+        courses:course_id (
+          id,
+          name,
+          location,
+          province
+        )
+      `)
+      .eq('user_id', userId)
+      .order('position');
+    
+    if (error) throw error;
+    return data || [];
+  } catch (error) {
+    console.error('Error getting favorite courses:', error);
+    return [];
+  }
+}
+
+// Add a course to favorites
+export async function addFavoriteCourse(userId: string, courseId: string, position?: number) {
+  try {
+    if (!userId) throw new Error('User ID is required');
+    if (!courseId) throw new Error('Course ID is required');
+    
+    // Get the highest position if not provided
+    if (!position) {
+      const { data: existing } = await supabase
+        .from('favorite_courses')
+        .select('position')
+        .eq('user_id', userId)
+        .order('position', { ascending: false })
+        .limit(1);
+        
+      position = existing && existing.length > 0 ? existing[0].position + 1 : 1;
+    }
+    
+    const { data, error } = await supabase
+      .from('favorite_courses')
+      .insert({
+        user_id: userId,
+        course_id: courseId,
+        position
+      })
+      .select()
+      .single();
+      
+    if (error) throw error;
+    return data;
+  } catch (error) {
+    console.error('Error adding favorite course:', error);
+    throw error;
+  }
+}
+
+// Remove a course from favorites
+export async function removeFavoriteCourse(userId: string, courseId: string) {
+  try {
+    if (!userId) throw new Error('User ID is required');
+    if (!courseId) throw new Error('Course ID is required');
+    
+    const { error } = await supabase
+      .from('favorite_courses')
+      .delete()
+      .eq('user_id', userId)
+      .eq('course_id', courseId);
+      
+    if (error) throw error;
+    return true;
+  } catch (error) {
+    console.error('Error removing favorite course:', error);
+    throw error;
+  }
+}
+
+// Update favorite course positions
+export async function updateFavoriteCoursePositions(userId: string, orderedCourseIds: string[]) {
+  try {
+    if (!userId) throw new Error('User ID is required');
+    
+    // Update positions in a transaction
+    const updates = orderedCourseIds.map((courseId, index) => ({
+      user_id: userId,
+      course_id: courseId,
+      position: index + 1
+    }));
+    
+    const { error } = await supabase.rpc('update_favorite_positions', { 
+      updates: updates 
+    });
+    
+    if (error) throw error;
+    return true;
+  } catch (error) {
+    console.error('Error updating favorite course positions:', error);
+    throw error;
+  }
+}
+
+// Bucket List API functions
+
+// Get bucket list courses for a user
+export async function getBucketListCourses(userId: string) {
+  try {
+    if (!userId) throw new Error('User ID is required');
+    
+    const { data, error } = await supabase
+      .from('bucket_list_courses')
+      .select(`
+        id,
+        course_id,
+        position,
+        courses:course_id (
+          id,
+          name,
+          location,
+          province
+        )
+      `)
+      .eq('user_id', userId)
+      .order('position');
+    
+    if (error) throw error;
+    return data || [];
+  } catch (error) {
+    console.error('Error getting bucket list courses:', error);
+    return [];
+  }
+}
+
+// Add a course to bucket list
+export async function addBucketListCourse(userId: string, courseId: string, position?: number) {
+  try {
+    if (!userId) throw new Error('User ID is required');
+    if (!courseId) throw new Error('Course ID is required');
+    
+    // Get the highest position if not provided
+    if (!position) {
+      const { data: existing } = await supabase
+        .from('bucket_list_courses')
+        .select('position')
+        .eq('user_id', userId)
+        .order('position', { ascending: false })
+        .limit(1);
+        
+      position = existing && existing.length > 0 ? existing[0].position + 1 : 1;
+    }
+    
+    const { data, error } = await supabase
+      .from('bucket_list_courses')
+      .insert({
+        user_id: userId,
+        course_id: courseId,
+        position
+      })
+      .select()
+      .single();
+      
+    if (error) throw error;
+    return data;
+  } catch (error) {
+    console.error('Error adding bucket list course:', error);
+    throw error;
+  }
+}
+
+// Remove a course from bucket list
+export async function removeBucketListCourse(userId: string, courseId: string) {
+  try {
+    if (!userId) throw new Error('User ID is required');
+    if (!courseId) throw new Error('Course ID is required');
+    
+    const { error } = await supabase
+      .from('bucket_list_courses')
+      .delete()
+      .eq('user_id', userId)
+      .eq('course_id', courseId);
+      
+    if (error) throw error;
+    return true;
+  } catch (error) {
+    console.error('Error removing bucket list course:', error);
+    throw error;
+  }
+}
+
+// Update bucket list course positions
+export async function updateBucketListPositions(userId: string, orderedCourseIds: string[]) {
+  try {
+    if (!userId) throw new Error('User ID is required');
+    
+    // Update positions in a transaction
+    const updates = orderedCourseIds.map((courseId, index) => ({
+      user_id: userId,
+      course_id: courseId,
+      position: index + 1
+    }));
+    
+    const { error } = await supabase.rpc('update_bucket_list_positions', { 
+      updates: updates 
+    });
+    
+    if (error) throw error;
+    return true;
+  } catch (error) {
+    console.error('Error updating bucket list positions:', error);
+    throw error;
+  }
 } 

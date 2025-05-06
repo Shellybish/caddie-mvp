@@ -5,7 +5,7 @@ import "./globals.css"
 import { ThemeProvider } from "@/components/theme-provider"
 import { UserProvider } from "@/contexts/user-context"
 import { cn } from "@/lib/utils"
-import { Toaster } from "@/components/ui/toaster"
+import { Toaster } from "@/components/ui/sonner"
 import { checkSupabaseConnection, checkSupabaseSchema } from "@/lib/supabase/client"
 
 // Verify Supabase connection on app initialization (in development)

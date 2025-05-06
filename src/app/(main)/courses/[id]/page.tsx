@@ -4,9 +4,30 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { StarRating } from "@/components/common/star-rating"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { CalendarIcon, GlobeIcon, ListIcon, MapPinIcon, PhoneIcon, Share2Icon, ThumbsUpIcon } from "lucide-react"
+import { 
+  BookmarkIcon, 
+  CalendarIcon, 
+  GlobeIcon, 
+  HeartIcon, 
+  ListIcon, 
+  MapPinIcon, 
+  PhoneIcon, 
+  Share2Icon, 
+  ThumbsUpIcon 
+} from "lucide-react"
 import { getCourseById, type Course } from "@/lib/api/courses"
-import { getCourseAverageRating, getCourseReviews } from "@/lib/api/courses"
+import { getCourseAverageRating, getCourseReviews, hasUserLikedReview } from "@/lib/api/courses"
+import { 
+  Pagination, 
+  PaginationContent,
+  PaginationItem, 
+  PaginationLink, 
+  PaginationNext, 
+  PaginationPrevious 
+} from "@/components/ui/pagination"
+import { LikeButton } from "@/components/reviews/LikeButton"
+import { cookies } from "next/headers"
+import { getUserIdFromCookies } from "@/lib/auth/session"
 
 // Define an enhanced course type with UI-specific properties
 type EnhancedCourse = Course & {
@@ -15,21 +36,51 @@ type EnhancedCourse = Course & {
   images: string[];
 }
 
+type EnhancedReview = {
+  id: string;
+  user_id: string;
+  course_id: string;
+  rating: number;
+  review_text?: string;
+  date_played: string;
+  created_at: string;
+  likes_count: number;
+  user_has_liked?: boolean;
+  user?: {
+    username: string;
+    avatar_url?: string;
+  }
+}
+
 type CourseDetailPageProps = {
   params: {
     id: string;
   };
+  searchParams?: {
+    page?: string;
+  };
 }
 
-export default async function CourseDetailPage({ params }: CourseDetailPageProps) {
+const REVIEWS_PER_PAGE = 5;
+
+export default async function CourseDetailPage({ params, searchParams }: CourseDetailPageProps) {
   // Fix for Next.js warning about using params synchronously
   const resolvedParams = await Promise.resolve(params);
   const id = resolvedParams.id;
+  
+  // Get current page from query params
+  const page = searchParams?.page ? parseInt(searchParams.page) : 1;
+  
+  // Get user ID from cookies for checking if user liked reviews
+  const cookieStore = cookies();
+  const userId = await getUserIdFromCookies(cookieStore);
   
   console.log("Course ID from params:", id, typeof id);
   
   // Try to fetch the course from the database
   let course: EnhancedCourse;
+  let reviews: EnhancedReview[] = [];
+  let reviewCount = 0;
   
   try {
     console.log("Attempting to fetch course with ID:", id);
@@ -37,14 +88,43 @@ export default async function CourseDetailPage({ params }: CourseDetailPageProps
     console.log("Successfully fetched course:", dbCourse?.name || "Unknown");
     
     // Get the review data
-    const reviews = await getCourseReviews(id);
+    const rawReviews = await getCourseReviews(id);
     const avgRating = await getCourseAverageRating(id);
+    
+    // Set the review count from the actual reviews fetched
+    reviewCount = rawReviews?.length || 0;
+    console.log(`Found ${reviewCount} reviews for this course`);
+    
+    // Calculate pagination
+    const startIndex = (page - 1) * REVIEWS_PER_PAGE;
+    const paginatedReviews = rawReviews.slice(startIndex, startIndex + REVIEWS_PER_PAGE);
+    
+    // Check if user has liked each review
+    if (userId) {
+      const reviewsWithLikeStatus = await Promise.all(
+        paginatedReviews.map(async (review) => {
+          try {
+            const hasLiked = await hasUserLikedReview(review.id, userId);
+            return {
+              ...review,
+              user_has_liked: hasLiked
+            };
+          } catch (error) {
+            console.error("Error checking if user liked review:", error);
+            return review;
+          }
+        })
+      );
+      reviews = reviewsWithLikeStatus;
+    } else {
+      reviews = paginatedReviews;
+    }
     
     // Transform to EnhancedCourse
     course = {
       ...dbCourse,
       rating: avgRating,
-      reviewCount: reviews.length,
+      reviewCount: reviewCount,
       images: [
         "/placeholder.svg?height=400&width=800",
         "/placeholder.svg?height=400&width=800",
@@ -91,6 +171,9 @@ export default async function CourseDetailPage({ params }: CourseDetailPageProps
     };
   }
 
+  // Calculate total pages for pagination
+  const totalPages = Math.ceil(reviewCount / REVIEWS_PER_PAGE);
+
   // Mock lists featuring this course
   const lists = [
     {
@@ -131,9 +214,43 @@ export default async function CourseDetailPage({ params }: CourseDetailPageProps
             <div className="flex items-center gap-2">
               <StarRating rating={course.rating} />
               <span className="text-white/90">
-                {course.rating} ({course.reviewCount} reviews)
+                {course.rating > 0 ? course.rating.toFixed(1) : "0.0"} 
+                ({reviewCount > 0 ? reviewCount : "0"} {reviewCount === 1 ? "review" : "reviews"})
               </span>
             </div>
+            
+            {/* Add buttons for favorites and bucket list */}
+            {userId && (
+              <div className="flex gap-3 mt-4">
+                <Button 
+                  variant="outline"
+                  size="sm"
+                  className="gap-1 text-sm bg-white/10 hover:bg-white/20 text-white border-white/20"
+                  asChild
+                >
+                  <Link href={`/courses/${course.id}/log`}>
+                    <CalendarIcon className="h-4 w-4" />
+                    Log Play
+                  </Link>
+                </Button>
+                
+                <Link 
+                  href={`/api/favorite?courseId=${course.id}`}
+                  className="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border bg-white/10 hover:bg-white/20 text-white border-white/20 h-9 px-3 gap-1"
+                >
+                  <HeartIcon className="h-4 w-4" />
+                  Add to Favorites
+                </Link>
+                
+                <Link 
+                  href={`/api/bucket-list?courseId=${course.id}`}
+                  className="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border bg-white/10 hover:bg-white/20 text-white border-white/20 h-9 px-3 gap-1"
+                >
+                  <BookmarkIcon className="h-4 w-4" />
+                  Add to Bucket List
+                </Link>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -246,72 +363,95 @@ export default async function CourseDetailPage({ params }: CourseDetailPageProps
                 </div>
               </TabsContent>
 
-              <TabsContent value="reviews" className="space-y-6">
-                <div className="flex items-center justify-between">
-                  <h2 className="text-xl font-bold">Reviews</h2>
-                  <Button asChild>
-                    <Link href={`/courses/${course.id}/review`}>Write a Review</Link>
-                  </Button>
-                </div>
+              <TabsContent value="reviews">
+                <div className="space-y-6">
+                  <div className="flex items-center justify-between">
+                    <h2 className="text-xl font-bold">Reviews</h2>
+                    <Button asChild>
+                      <Link href={`/courses/${course.id}/log`}>
+                        Log a Round
+                      </Link>
+                    </Button>
+                  </div>
 
-                <div className="space-y-4">
-                  {/* Create mock reviews if no real reviews available */}
-                  {(course.reviewCount > 0 ? [{
-                    id: "1",
-                    user: {
-                      name: "John Smith",
-                      image: "/placeholder.svg?height=40&width=40",
-                    },
-                    rating: 5,
-                    date: "2023-10-15",
-                    content:
-                      "Absolutely stunning course with amazing views. The condition was impeccable and the staff were incredibly friendly. The par 3s are particularly challenging and memorable. Will definitely be back!",
-                    likes: 12,
-                  },
-                  {
-                    id: "2",
-                    user: {
-                      name: "Sarah Johnson",
-                      image: "/placeholder.svg?height=40&width=40",
-                    },
-                    rating: 4,
-                    date: "2023-09-22",
-                    content:
-                      "Great layout and excellent condition. The greens were rolling perfectly, though the bunkers were a bit inconsistent. The clubhouse facilities are top-notch and the food was excellent. A must-play if you're in Johannesburg.",
-                    likes: 8,
-                  }] : []).map((review) => (
-                    <Card key={review.id} className="p-4">
-                      <div className="flex gap-4">
-                        <Avatar>
-                          <AvatarImage src={review.user.image || "/placeholder.svg"} alt={review.user.name} />
-                          <AvatarFallback>{review.user.name.substring(0, 2).toUpperCase()}</AvatarFallback>
-                        </Avatar>
-                        <div className="space-y-2 flex-1">
-                          <div className="flex items-center justify-between">
-                            <p className="font-medium">{review.user.name}</p>
-                            <p className="text-xs text-muted-foreground">
-                              <CalendarIcon className="h-3 w-3 inline mr-1" />
-                              {new Date(review.date).toLocaleDateString()}
-                            </p>
-                          </div>
-                          <div className="flex items-center">
-                            <StarRating rating={review.rating} />
-                          </div>
-                          <p className="text-sm">{review.content}</p>
-                          <div className="flex items-center justify-end">
-                            <Button variant="ghost" size="sm" className="text-muted-foreground">
-                              <ThumbsUpIcon className="h-4 w-4 mr-1" />
-                              {review.likes}
-                            </Button>
-                          </div>
-                        </div>
-                      </div>
-                    </Card>
-                  ))}
-                </div>
+                  {reviews.length > 0 ? (
+                    <div className="space-y-6">
+                      {reviews.map((review) => (
+                        <Card key={review.id} className="overflow-hidden">
+                          <CardContent className="p-6">
+                            <div className="flex items-start gap-4">
+                              <Avatar className="h-10 w-10">
+                                <AvatarImage src={review.user?.avatar_url || "/placeholder.svg"} alt={review.user?.username || "User"} />
+                                <AvatarFallback>{(review.user?.username || "U").charAt(0).toUpperCase()}</AvatarFallback>
+                              </Avatar>
+                              <div className="flex-1 space-y-1.5">
+                                <div className="flex items-center justify-between">
+                                  <p className="font-medium">{review.user?.username || "Anonymous User"}</p>
+                                  <p className="text-sm text-muted-foreground">
+                                    {review.date_played ? (
+                                      <span>{new Date(review.date_played).toLocaleDateString()}</span>
+                                    ) : (
+                                      <span>{new Date(review.created_at).toLocaleDateString()}</span>
+                                    )}
+                                  </p>
+                                </div>
+                                <div className="flex items-center">
+                                  <StarRating rating={review.rating} />
+                                  <span className="ml-2 text-sm text-muted-foreground">
+                                    {review.rating.toFixed(1)}
+                                  </span>
+                                </div>
+                                {review.review_text && <p className="mt-2">{review.review_text}</p>}
+                                <div className="flex items-center mt-3">
+                                  <LikeButton 
+                                    reviewId={review.id} 
+                                    initialLiked={review.user_has_liked || false} 
+                                    initialLikesCount={review.likes_count || 0}
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      ))}
 
-                <div className="flex justify-center">
-                  <Button variant="outline">Load More Reviews</Button>
+                      {totalPages > 1 && (
+                        <Pagination className="mt-6">
+                          <PaginationContent>
+                            {page > 1 && (
+                              <PaginationItem>
+                                <PaginationPrevious href={`/courses/${course.id}?page=${page - 1}`} />
+                              </PaginationItem>
+                            )}
+                            
+                            {Array.from({ length: totalPages }, (_, i) => i + 1).map((pageNum) => (
+                              <PaginationItem key={pageNum}>
+                                <PaginationLink 
+                                  href={`/courses/${course.id}?page=${pageNum}`}
+                                  isActive={pageNum === page}
+                                >
+                                  {pageNum}
+                                </PaginationLink>
+                              </PaginationItem>
+                            ))}
+                            
+                            {page < totalPages && (
+                              <PaginationItem>
+                                <PaginationNext href={`/courses/${course.id}?page=${page + 1}`} />
+                              </PaginationItem>
+                            )}
+                          </PaginationContent>
+                        </Pagination>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="py-8 text-center">
+                      <p className="text-muted-foreground mb-4">No reviews yet. Be the first to review this course!</p>
+                      <Button asChild>
+                        <Link href={`/courses/${course.id}/review`}>Write a Review</Link>
+                      </Button>
+                    </div>
+                  )}
                 </div>
               </TabsContent>
 
@@ -455,7 +595,7 @@ export default async function CourseDetailPage({ params }: CourseDetailPageProps
                     </div>
                     <div>
                       <p className="text-sm font-medium line-clamp-1">Glendower Golf Club</p>
-                      <p className="text-xs text-muted-foreground">15.1 km away</p>
+                      <p className="text-xs text-muted-foreground">15.7 km away</p>
                     </div>
                   </div>
                 </div>

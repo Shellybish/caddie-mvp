@@ -9,6 +9,7 @@ interface StarRatingProps {
   size?: "default" | "large"
   interactive?: boolean
   onChange?: (rating: number) => void
+  className?: string
 }
 
 export function StarRating({
@@ -17,6 +18,7 @@ export function StarRating({
   size = "default",
   interactive = false,
   onChange,
+  className,
 }: StarRatingProps) {
   const [hoverRating, setHoverRating] = useState(0)
 
@@ -45,7 +47,7 @@ export function StarRating({
       className={cn("star-rating", {
         large: size === "large",
         "cursor-pointer": interactive,
-      })}
+      }, className)}
     >
       {Array.from({ length: maxRating }).map((_, index) => {
         const starValue = index + 1

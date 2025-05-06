@@ -212,4 +212,98 @@ $$ language plpgsql security definer;
 -- Create the trigger
 create trigger on_auth_user_created
   after insert on auth.users
-  for each row execute procedure public.handle_new_user(); 
+  for each row execute procedure public.handle_new_user();
+
+-- 8. FAVORITE_COURSES TABLE
+create table public.favorite_courses (
+  id uuid default uuid_generate_v4() primary key,
+  user_id uuid references auth.users on delete cascade not null,
+  course_id uuid references public.courses on delete cascade not null,
+  position integer not null,
+  created_at timestamp with time zone default now() not null,
+  unique(user_id, course_id)
+);
+
+-- Enable RLS
+alter table public.favorite_courses enable row level security;
+
+-- Create policies
+create policy "Favorite courses are viewable by everyone."
+  on favorite_courses for select
+  using ( true );
+
+create policy "Users can insert their own favorite courses."
+  on favorite_courses for insert
+  with check ( auth.uid() = user_id );
+
+create policy "Users can update their own favorite courses."
+  on favorite_courses for update
+  using ( auth.uid() = user_id );
+
+create policy "Users can delete their own favorite courses."
+  on favorite_courses for delete
+  using ( auth.uid() = user_id );
+
+-- 9. BUCKET_LIST_COURSES TABLE
+create table public.bucket_list_courses (
+  id uuid default uuid_generate_v4() primary key,
+  user_id uuid references auth.users on delete cascade not null,
+  course_id uuid references public.courses on delete cascade not null,
+  position integer not null,
+  created_at timestamp with time zone default now() not null,
+  unique(user_id, course_id)
+);
+
+-- Enable RLS
+alter table public.bucket_list_courses enable row level security;
+
+-- Create policies
+create policy "Bucket list courses are viewable by everyone."
+  on bucket_list_courses for select
+  using ( true );
+
+create policy "Users can insert their own bucket list courses."
+  on bucket_list_courses for insert
+  with check ( auth.uid() = user_id );
+
+create policy "Users can update their own bucket list courses."
+  on bucket_list_courses for update
+  using ( auth.uid() = user_id );
+
+create policy "Users can delete their own bucket list courses."
+  on bucket_list_courses for delete
+  using ( auth.uid() = user_id );
+
+-- 10. RPC FUNCTIONS FOR UPDATING POSITIONS
+
+-- Function to update favorite course positions
+create or replace function update_favorite_positions(updates jsonb[])
+returns void as $$
+declare
+  update_item jsonb;
+begin
+  for update_item in select * from jsonb_array_elements(updates)
+  loop
+    update public.favorite_courses
+    set position = (update_item->>'position')::integer
+    where user_id = (update_item->>'user_id')::uuid
+    and course_id = (update_item->>'course_id')::uuid;
+  end loop;
+end;
+$$ language plpgsql security definer;
+
+-- Function to update bucket list positions
+create or replace function update_bucket_list_positions(updates jsonb[])
+returns void as $$
+declare
+  update_item jsonb;
+begin
+  for update_item in select * from jsonb_array_elements(updates)
+  loop
+    update public.bucket_list_courses
+    set position = (update_item->>'position')::integer
+    where user_id = (update_item->>'user_id')::uuid
+    and course_id = (update_item->>'course_id')::uuid;
+  end loop;
+end;
+$$ language plpgsql security definer; 
