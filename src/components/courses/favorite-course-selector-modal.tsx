@@ -4,9 +4,7 @@ import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
-import { Card } from "@/components/ui/card"
-import { ScrollArea } from "@/components/ui/scroll-area"
-import { Search, Plus } from "lucide-react"
+import { SearchIcon, Plus } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
 import { useUser } from "@/contexts/user-context"
 import { addFavoriteCourse } from "@/lib/api/profiles"
@@ -133,68 +131,64 @@ export function FavoriteCourseSelectionModal({
           {buttonText}
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-[600px]">
         <DialogHeader>
           <DialogTitle>Add a Favorite Course</DialogTitle>
         </DialogHeader>
         
-        <div className="space-y-4 py-4">
-          <div className="relative">
-            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search for a course..."
-              value={searchQuery}
-              onChange={handleSearchChange}
-              className="pl-8"
-            />
-          </div>
-          
-          <ScrollArea className="h-[300px] rounded-md border">
-            {isSearching ? (
-              <div className="p-4 text-center">
-                <p className="text-sm text-muted-foreground">Searching...</p>
+        <div className="relative flex w-full mb-4">
+          <SearchIcon className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            placeholder="Search for a course..."
+            className="pl-9"
+            value={searchQuery}
+            onChange={handleSearchChange}
+          />
+        </div>
+        
+        <div className="max-h-[400px] overflow-y-auto space-y-2">
+          {isSearching ? (
+            <div className="py-4 text-center">
+              <p className="text-sm text-muted-foreground">Searching...</p>
+            </div>
+          ) : courses.length > 0 ? (
+            courses.map((course) => (
+              <div 
+                key={course.id} 
+                className="flex items-center justify-between p-3 rounded-md border hover:bg-muted/50"
+              >
+                <div>
+                  <h4 className="font-medium">{course.name}</h4>
+                  <p className="text-sm text-muted-foreground">{course.location}, {course.province}</p>
+                </div>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => handleAddFavorite(course.id)}
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add
+                </Button>
               </div>
-            ) : courses.length > 0 ? (
-              <div className="p-4 space-y-2">
-                {courses.map((course) => (
-                  <Card key={course.id} className="p-3 hover:bg-accent">
-                    <div className="flex justify-between items-center">
-                      <div>
-                        <h3 className="font-medium">{course.name}</h3>
-                        <p className="text-sm text-muted-foreground">
-                          {course.location}, {course.province}
-                        </p>
-                      </div>
-                      <Button 
-                        variant="ghost" 
-                        size="sm"
-                        onClick={() => handleAddFavorite(course.id)}
-                      >
-                        <Plus className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </Card>
-                ))}
-              </div>
-            ) : searchQuery ? (
-              <div className="p-4 text-center">
-                <p className="text-sm text-muted-foreground">No courses found</p>
-              </div>
-            ) : (
-              <div className="p-4 text-center">
-                <p className="text-sm text-muted-foreground">
-                  Search for courses to add to your favorites
-                </p>
-              </div>
-            )}
-          </ScrollArea>
-          
-          {!canAddMore && (
-            <p className="text-sm text-destructive text-center">
-              You've reached the maximum of {maxFavorites} favorite courses
-            </p>
+            ))
+          ) : searchQuery ? (
+            <div className="py-4 text-center">
+              <p className="text-sm text-muted-foreground">No courses found</p>
+            </div>
+          ) : (
+            <div className="py-4 text-center">
+              <p className="text-sm text-muted-foreground">
+                Search for courses to add to your favorites
+              </p>
+            </div>
           )}
         </div>
+          
+        {!canAddMore && (
+          <p className="text-sm text-destructive text-center mt-4">
+            You've reached the maximum of {maxFavorites} favorite courses
+          </p>
+        )}
       </DialogContent>
     </Dialog>
   )
