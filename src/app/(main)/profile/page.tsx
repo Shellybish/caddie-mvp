@@ -22,7 +22,7 @@ import {
   GripVertical,
 } from "lucide-react"
 import { useUser } from "@/contexts/user-context"
-import { getProfileById, getUserStats, getFavoriteCourses, getBucketListCourses, updateFavoriteCoursePositions } from "@/lib/api/profiles"
+import { getProfileById, getUserStats, getFavoriteCourses, getBucketListCourses, updateFavoriteCoursePositions, getListsByUserId, getListById } from "@/lib/api/profiles"
 import { getUserReviews } from "@/lib/api/courses"
 import { BucketListSearchModal } from "@/components/courses/bucket-list-search-modal"
 import { FavoriteCourseSelectionModal } from "@/components/courses/favorite-course-selector-modal"
@@ -123,6 +123,7 @@ export default function ProfilePage() {
   const [recentPlays, setRecentPlays] = useState<UserReview[]>([])
   const [favoriteCourses, setFavoriteCourses] = useState<any[]>([])
   const [bucketListCourses, setBucketListCourses] = useState<any[]>([])
+  const [userLists, setUserLists] = useState<any[]>([])
   const [ratingDistribution, setRatingDistribution] = useState<number[]>([0, 0, 0, 0, 0])
   const [isBucketListModalOpen, setIsBucketListModalOpen] = useState(false)
   
@@ -189,12 +190,51 @@ export default function ProfilePage() {
         const bucketList = await getBucketListCourses(user.id)
         console.log(`Received ${bucketList.length} bucket list courses`)
         setBucketListCourses(bucketList)
+        
+        // Get user lists
+        console.log("Fetching user lists...")
+        try {
+          const lists = await getListsByUserId(user.id, true);
+          
+          // Fetch courses for each list
+          const listsWithCourses = await Promise.all(
+            lists.map(async (list) => {
+              try {
+                const listWithCourses = await getListById(list.id);
+                return {
+                  ...listWithCourses,
+                  courseCount: listWithCourses.list_courses?.length || 0,
+                  preview: listWithCourses.list_courses 
+                    ? listWithCourses.list_courses
+                        .slice(0, 3)
+                        .map((course: any) => course.courses?.image_url || "/placeholder.svg?height=100&width=100")
+                    : ["/placeholder.svg?height=100&width=100"],
+                  likes: 0 // This would be replaced with actual likes count when implemented
+                };
+              } catch (error) {
+                console.error(`Error fetching details for list ${list.id}:`, error);
+                return {
+                  ...list,
+                  courseCount: 0,
+                  preview: ["/placeholder.svg?height=100&width=100"],
+                  likes: 0
+                };
+              }
+            })
+          );
+          console.log(`Received ${listsWithCourses.length} user lists`)
+          setUserLists(listsWithCourses);
+        } catch (error) {
+          console.error("Error fetching user lists:", error);
+          setUserLists([]);
+        }
       } catch (error) {
         console.error("Error fetching user data:", error)
         setUserReviews([])
         setRecentPlays([])
         setFavoriteCourses([])
         setBucketListCourses([])
+        setUserLists([])
       } finally {
         setIsLoading(false)
       }
@@ -223,34 +263,6 @@ export default function ProfilePage() {
     )
   }
   
-  // Mock lists - would be replaced with actual API calls
-  const lists = [
-    {
-      id: "1",
-      title: "Top 10 Courses in Western Cape",
-      description: "The most beautiful and challenging courses in the Western Cape region.",
-      courseCount: 10,
-      likes: 24,
-      preview: [
-        "/placeholder.svg?height=100&width=100",
-        "/placeholder.svg?height=100&width=100",
-        "/placeholder.svg?height=100&width=100",
-      ],
-    },
-    {
-      id: "2",
-      title: "Best Value Courses in South Africa",
-      description: "Great golf experiences that won't break the bank.",
-      courseCount: 12,
-      likes: 18,
-      preview: [
-        "/placeholder.svg?height=100&width=100",
-        "/placeholder.svg?height=100&width=100",
-        "/placeholder.svg?height=100&width=100",
-      ],
-    },
-  ]
-
   // Function to refresh bucket list after adding courses
   const refreshBucketList = async () => {
     if (!user?.id) return
@@ -259,6 +271,44 @@ export default function ProfilePage() {
       setBucketListCourses(bucketList)
     } catch (error) {
       console.error("Error refreshing bucket list:", error)
+    }
+  }
+
+  // Function to refresh user lists after creating a new one
+  const refreshUserLists = async () => {
+    if (!user?.id) return
+    try {
+      const lists = await getListsByUserId(user.id, true);
+      
+      // Fetch courses for each list
+      const listsWithCourses = await Promise.all(
+        lists.map(async (list) => {
+          try {
+            const listWithCourses = await getListById(list.id);
+            return {
+              ...listWithCourses,
+              courseCount: listWithCourses.list_courses?.length || 0,
+              preview: listWithCourses.list_courses 
+                ? listWithCourses.list_courses
+                    .slice(0, 3)
+                    .map((course: any) => course.courses?.image_url || "/placeholder.svg?height=100&width=100")
+                : ["/placeholder.svg?height=100&width=100"],
+              likes: 0 // This would be replaced with actual likes count when implemented
+            };
+          } catch (error) {
+            console.error(`Error fetching details for list ${list.id}:`, error);
+            return {
+              ...list,
+              courseCount: 0,
+              preview: ["/placeholder.svg?height=100&width=100"],
+              likes: 0
+            };
+          }
+        })
+      );
+      setUserLists(listsWithCourses);
+    } catch (error) {
+      console.error("Error refreshing user lists:", error);
     }
   }
 
@@ -804,54 +854,61 @@ export default function ProfilePage() {
             <TabsContent value="lists" className="space-y-6">
               <div className="flex items-center justify-between">
                 <h2 className="text-xl font-bold">Lists</h2>
-                <Button asChild variant="outline">
+                <Button asChild variant="outline" onClick={refreshUserLists}>
                   <Link href="/lists/create">Create New List</Link>
                 </Button>
               </div>
 
-              <div className="grid md:grid-cols-2 gap-4">
-                {lists.map((list) => (
-                  <Card key={list.id} className="overflow-hidden">
-                    <CardContent className="p-4 space-y-3">
-                      <div className="flex justify-between items-start">
-                        <h3 className="font-medium">{list.title}</h3>
-                        <div className="flex items-center text-sm text-muted-foreground">
-                          <ThumbsUpIcon className="h-3.5 w-3.5 mr-1" />
-                          {list.likes}
+              {isLoading ? (
+                <div className="text-center py-8">Loading your lists...</div>
+              ) : userLists && userLists.length > 0 ? (
+                <div className="grid md:grid-cols-2 gap-4">
+                  {userLists.map((list) => (
+                    <Card key={list.id} className="overflow-hidden">
+                      <CardContent className="p-4 space-y-3">
+                        <div className="flex justify-between items-start">
+                          <h3 className="font-medium">{list.title}</h3>
+                          <div className="flex items-center text-sm text-muted-foreground">
+                            <ThumbsUpIcon className="h-3.5 w-3.5 mr-1" />
+                            {list.likes}
+                          </div>
                         </div>
-                      </div>
-                      <p className="text-sm text-muted-foreground line-clamp-2">{list.description}</p>
-                      <div className="flex items-center text-sm text-muted-foreground">
-                        <ListIcon className="h-3.5 w-3.5 mr-1" />
-                        {list.courseCount} courses
-                      </div>
-                      <div className="flex gap-2">
-                        {list.preview.map((image, index) => (
-                          <div key={index} className="w-16 h-12 rounded overflow-hidden">
-                            <img
-                              src={image || "/placeholder.svg"}
-                              alt={`Preview ${index + 1}`}
-                              className="w-full h-full object-cover"
-                            />
-                          </div>
-                        ))}
-                        {list.courseCount > 3 && (
-                          <div className="w-16 h-12 rounded bg-muted flex items-center justify-center text-muted-foreground text-xs">
-                            +{list.courseCount - 3}
-                          </div>
-                        )}
-                      </div>
-                      <Button asChild variant="outline" className="w-full">
-                        <Link href={`/lists/${list.id}`}>View List</Link>
-                      </Button>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-
-              <div className="flex justify-center">
-                <Button variant="outline">View All Lists</Button>
-              </div>
+                        <p className="text-sm text-muted-foreground line-clamp-2">{list.description}</p>
+                        <div className="flex items-center text-sm text-muted-foreground">
+                          <ListIcon className="h-3.5 w-3.5 mr-1" />
+                          {list.courseCount} courses
+                        </div>
+                        <div className="flex gap-2">
+                          {list.preview.map((image: string, index: number) => (
+                            <div key={index} className="w-16 h-12 rounded overflow-hidden">
+                              <img
+                                src={image || "/placeholder.svg"}
+                                alt={`Preview ${index + 1}`}
+                                className="w-full h-full object-cover"
+                              />
+                            </div>
+                          ))}
+                          {list.courseCount > 3 && (
+                            <div className="w-16 h-12 rounded bg-muted flex items-center justify-center text-muted-foreground text-xs">
+                              +{list.courseCount - 3}
+                            </div>
+                          )}
+                        </div>
+                        <Button asChild variant="outline" className="w-full">
+                          <Link href={`/lists/${list.id}`}>View List</Link>
+                        </Button>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              ) : (
+                <div className="py-8 text-center">
+                  <p className="text-muted-foreground mb-4">You haven't created any lists yet</p>
+                  <Button asChild>
+                    <Link href="/lists/create">Create Your First List</Link>
+                  </Button>
+                </div>
+              )}
             </TabsContent>
 
             <TabsContent value="following" className="space-y-6">
