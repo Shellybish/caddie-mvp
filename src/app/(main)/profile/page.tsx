@@ -23,6 +23,7 @@ import {
 import { useUser } from "@/contexts/user-context"
 import { getProfileById, getUserStats, getFavoriteCourses, getBucketListCourses } from "@/lib/api/profiles"
 import { getUserReviews } from "@/lib/api/courses"
+import { BucketListSearchModal } from "@/components/courses/bucket-list-search-modal"
 
 // Define types for the reviews
 interface UserReview {
@@ -58,6 +59,7 @@ export default function ProfilePage() {
   const [favoriteCourses, setFavoriteCourses] = useState<any[]>([])
   const [bucketListCourses, setBucketListCourses] = useState<any[]>([])
   const [ratingDistribution, setRatingDistribution] = useState<number[]>([0, 0, 0, 0, 0])
+  const [isBucketListModalOpen, setIsBucketListModalOpen] = useState(false)
   
   // Fetch user stats and reviews when the user is loaded
   useEffect(() => {
@@ -176,6 +178,17 @@ export default function ProfilePage() {
     },
   ]
 
+  // Function to refresh bucket list after adding courses
+  const refreshBucketList = async () => {
+    if (!user?.id) return
+    try {
+      const bucketList = await getBucketListCourses(user.id)
+      setBucketListCourses(bucketList)
+    } catch (error) {
+      console.error("Error refreshing bucket list:", error)
+    }
+  }
+
   return (
     <div className="container py-8 md:py-12">
       <div className="flex flex-col lg:flex-row gap-8">
@@ -285,8 +298,11 @@ export default function ProfilePage() {
                 <div className="lg:col-span-2 space-y-4">
                   <div className="flex items-center justify-between">
                     <h2 className="text-xl font-bold">Favorite Courses</h2>
-                    <Button asChild variant="outline" size="sm">
-                      <Link href="/courses">Find Courses</Link>
+                    <Button 
+                      onClick={() => setIsBucketListModalOpen(true)} 
+                      variant="outline"
+                    >
+                      Find Courses
                     </Button>
                   </div>
                   
@@ -321,10 +337,12 @@ export default function ProfilePage() {
                       ))}
                     </div>
                   ) : (
-                    <div className="py-8 text-center">
+                    <div className="text-center py-8 border rounded-lg">
                       <p className="text-muted-foreground mb-4">You haven't added any favorite courses yet.</p>
-                      <Button asChild>
-                        <Link href="/courses">Explore Courses</Link>
+                      <Button 
+                        onClick={() => setIsBucketListModalOpen(true)}
+                      >
+                        Explore Courses
                       </Button>
                     </div>
                   )}
@@ -489,10 +507,19 @@ export default function ProfilePage() {
                   {/* Bucket List */}
                   <Card>
                     <CardContent className="p-4">
-                      <h3 className="font-medium mb-4 flex items-center">
-                        <BookmarkIcon className="h-4 w-4 mr-2" />
-                        Bucket List
-                      </h3>
+                      <div className="flex items-center justify-between mb-4">
+                        <h3 className="font-medium flex items-center">
+                          <BookmarkIcon className="h-4 w-4 mr-2" />
+                          Bucket List
+                        </h3>
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          onClick={() => setIsBucketListModalOpen(true)}
+                        >
+                          Add Courses
+                        </Button>
+                      </div>
                       
                       {isLoading ? (
                         <div className="py-4 text-center">
@@ -521,18 +548,27 @@ export default function ProfilePage() {
                               </div>
                             </div>
                           ))}
-                          
                           {bucketListCourses.length > 5 && (
-                            <Button variant="outline" size="sm" className="w-full mt-2">
-                              View All ({bucketListCourses.length})
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              className="w-full text-xs"
+                              asChild
+                            >
+                              <Link href="/profile/bucket-list">
+                                View all {bucketListCourses.length} courses
+                              </Link>
                             </Button>
                           )}
                         </div>
                       ) : (
                         <div className="py-4 text-center">
-                          <p className="text-sm text-muted-foreground mb-2">Your bucket list is empty.</p>
-                          <Button asChild size="sm">
-                            <Link href="/courses">Explore Courses</Link>
+                          <p className="text-sm text-muted-foreground mb-4">Your bucket list is empty.</p>
+                          <Button 
+                            size="sm"
+                            onClick={() => setIsBucketListModalOpen(true)}
+                          >
+                            Add Courses
                           </Button>
                         </div>
                       )}
@@ -730,6 +766,16 @@ export default function ProfilePage() {
           </Tabs>
         </div>
       </div>
+
+      {/* Bucket List Search Modal */}
+      {user && (
+        <BucketListSearchModal
+          userId={user.id}
+          isOpen={isBucketListModalOpen}
+          onOpenChange={setIsBucketListModalOpen}
+          onCoursesAdded={refreshBucketList}
+        />
+      )}
     </div>
   )
 }
