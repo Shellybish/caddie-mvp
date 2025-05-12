@@ -19,12 +19,17 @@ import {
   UserIcon,
   BookmarkIcon,
   BarChart2Icon,
+  GripVertical,
 } from "lucide-react"
 import { useUser } from "@/contexts/user-context"
-import { getProfileById, getUserStats, getFavoriteCourses, getBucketListCourses } from "@/lib/api/profiles"
+import { getProfileById, getUserStats, getFavoriteCourses, getBucketListCourses, updateFavoriteCoursePositions } from "@/lib/api/profiles"
 import { getUserReviews } from "@/lib/api/courses"
 import { BucketListSearchModal } from "@/components/courses/bucket-list-search-modal"
 import { FavoriteCourseSelectionModal } from "@/components/courses/favorite-course-selector-modal"
+import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from "@dnd-kit/core"
+import { SortableContext, arrayMove, sortableKeyboardCoordinates, useSortable, rectSwappingStrategy } from "@dnd-kit/sortable"
+import { CSS } from "@dnd-kit/utilities"
+import { useToast } from "@/components/ui/use-toast"
 
 // Define types for the reviews
 interface UserReview {
@@ -43,9 +48,68 @@ interface UserReview {
   } | null;
 }
 
+// Define a SortableFavoriteCourse component
+interface SortableFavoriteCourseProps {
+  favorite: any;
+}
+
+function SortableFavoriteCourse({ favorite }: SortableFavoriteCourseProps) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: favorite.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    zIndex: isDragging ? 10 : 1,
+    opacity: isDragging ? 0.8 : 1,
+  };
+
+  return (
+    <Card 
+      ref={setNodeRef} 
+      style={style} 
+      className={`overflow-hidden group ${isDragging ? 'ring-2 ring-primary shadow-lg' : ''}`}
+    >
+      <CardContent className="p-0">
+        <div className="h-32 bg-muted relative">
+          <img 
+            src="/placeholder.svg?height=200&width=300" 
+            alt={favorite.courses?.name || "Golf Course"} 
+            className="w-full h-full object-cover" 
+          />
+          <div 
+            {...attributes} 
+            {...listeners}
+            className="absolute top-2 right-2 bg-black/30 text-white p-1 rounded-md cursor-grab opacity-0 group-hover:opacity-100 transition-opacity"
+          >
+            <GripVertical className="h-4 w-4" />
+          </div>
+        </div>
+        <div className="p-4">
+          <h3 className="font-medium truncate">
+            <Link href={`/courses/${favorite.course_id}`} className="hover:underline">
+              {favorite.courses?.name || "Unknown Course"}
+            </Link>
+          </h3>
+          <p className="text-sm text-muted-foreground">
+            {favorite.courses?.location || "Unknown Location"}
+          </p>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function ProfilePage() {
   const { user, isLoading: isUserLoading } = useUser()
   const router = useRouter()
+  const { toast } = useToast()
   
   const [stats, setStats] = useState({
     coursesPlayed: 0,
@@ -62,6 +126,14 @@ export default function ProfilePage() {
   const [ratingDistribution, setRatingDistribution] = useState<number[]>([0, 0, 0, 0, 0])
   const [isBucketListModalOpen, setIsBucketListModalOpen] = useState(false)
   
+  // Add sensors for dnd-kit
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
   // Fetch user stats and reviews when the user is loaded
   useEffect(() => {
     const fetchUserData = async () => {
@@ -190,6 +262,35 @@ export default function ProfilePage() {
     }
   }
 
+  // Handle drag end event for reordering
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+    
+    if (over && active.id !== over.id) {
+      setFavoriteCourses((items) => {
+        const oldIndex = items.findIndex(item => item.id === active.id);
+        const newIndex = items.findIndex(item => item.id === over.id);
+        
+        const newItems = arrayMove(items, oldIndex, newIndex);
+        
+        // Update positions in the database
+        const courseIds = newItems.map(item => item.course_id);
+        if (user?.id) {
+          updateFavoriteCoursePositions(user.id, courseIds).catch(error => {
+            console.error("Error updating positions:", error);
+            toast({
+              title: "Error",
+              description: "Failed to update course order",
+              variant: "destructive",
+            });
+          });
+        }
+        
+        return newItems;
+      });
+    }
+  };
+
   return (
     <div className="container py-8 md:py-12">
       <div className="flex flex-col lg:flex-row gap-8">
@@ -298,7 +399,10 @@ export default function ProfilePage() {
                 {/* Favorite Courses Section */}
                 <div className="lg:col-span-2 space-y-4">
                   <div className="flex items-center justify-between">
-                    <h2 className="text-xl font-bold">Favorite Courses</h2>
+                    <div>
+                      <h2 className="text-xl font-bold">Favorite Courses</h2>
+                      <p className="text-sm text-muted-foreground">Drag to reorder your favorite courses</p>
+                    </div>
                     {favoriteCourses && favoriteCourses.length < 4 && (
                       <FavoriteCourseSelectionModal
                         onCourseAdded={() => {
@@ -322,31 +426,22 @@ export default function ProfilePage() {
                       <p className="text-muted-foreground mb-4">Loading favorite courses...</p>
                     </div>
                   ) : favoriteCourses && favoriteCourses.length > 0 ? (
-                    <div className="grid grid-cols-2 gap-4">
-                      {favoriteCourses.slice(0, 4).map((favorite) => (
-                        <Card key={favorite.id} className="overflow-hidden">
-                          <CardContent className="p-0">
-                            <div className="h-32 bg-muted">
-                              <img 
-                                src="/placeholder.svg?height=200&width=300" 
-                                alt={favorite.courses?.name || "Golf Course"} 
-                                className="w-full h-full object-cover" 
-                              />
-                            </div>
-                            <div className="p-4">
-                              <h3 className="font-medium truncate">
-                                <Link href={`/courses/${favorite.course_id}`} className="hover:underline">
-                                  {favorite.courses?.name || "Unknown Course"}
-                                </Link>
-                              </h3>
-                              <p className="text-sm text-muted-foreground">
-                                {favorite.courses?.location || "Unknown Location"}
-                              </p>
-                            </div>
-                          </CardContent>
-                        </Card>
-                      ))}
-                    </div>
+                    <DndContext 
+                      sensors={sensors}
+                      collisionDetection={closestCenter}
+                      onDragEnd={handleDragEnd}
+                    >
+                      <SortableContext 
+                        items={favoriteCourses.map(course => course.id)}
+                        strategy={rectSwappingStrategy}
+                      >
+                        <div className="grid grid-cols-2 gap-4">
+                          {favoriteCourses.slice(0, 4).map((favorite) => (
+                            <SortableFavoriteCourse key={favorite.id} favorite={favorite} />
+                          ))}
+                        </div>
+                      </SortableContext>
+                    </DndContext>
                   ) : (
                     <div className="text-center py-8 border rounded-lg">
                       <p className="text-muted-foreground mb-4">You haven't added any favorite courses yet.</p>
