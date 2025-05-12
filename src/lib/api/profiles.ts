@@ -452,6 +452,18 @@ export async function addFavoriteCourse(userId: string, courseId: string, positi
     if (!userId) throw new Error('User ID is required');
     if (!courseId) throw new Error('Course ID is required');
     
+    // Check if the user already has 4 favorite courses
+    const { data: existingFavorites, error: countError } = await supabase
+      .from('favorite_courses')
+      .select('course_id')
+      .eq('user_id', userId);
+      
+    if (countError) throw countError;
+    
+    if (existingFavorites && existingFavorites.length >= 4) {
+      throw new Error('You can only have up to 4 favorite courses');
+    }
+    
     // Get the highest position if not provided
     if (!position) {
       const { data: existing } = await supabase

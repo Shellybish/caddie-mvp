@@ -24,6 +24,7 @@ import { useUser } from "@/contexts/user-context"
 import { getProfileById, getUserStats, getFavoriteCourses, getBucketListCourses } from "@/lib/api/profiles"
 import { getUserReviews } from "@/lib/api/courses"
 import { BucketListSearchModal } from "@/components/courses/bucket-list-search-modal"
+import { FavoriteCourseSelectionModal } from "@/components/courses/favorite-course-selector-modal"
 
 // Define types for the reviews
 interface UserReview {
@@ -298,12 +299,22 @@ export default function ProfilePage() {
                 <div className="lg:col-span-2 space-y-4">
                   <div className="flex items-center justify-between">
                     <h2 className="text-xl font-bold">Favorite Courses</h2>
-                    <Button 
-                      onClick={() => setIsBucketListModalOpen(true)} 
-                      variant="outline"
-                    >
-                      Find Courses
-                    </Button>
+                    {favoriteCourses && favoriteCourses.length < 4 && (
+                      <FavoriteCourseSelectionModal
+                        onCourseAdded={() => {
+                          // Refresh favorite courses after adding
+                          if (user?.id) {
+                            getFavoriteCourses(user.id).then(courses => {
+                              setFavoriteCourses(courses);
+                            });
+                          }
+                        }}
+                        maxFavorites={4}
+                        currentFavoriteCount={favoriteCourses.length}
+                        buttonText="Find Courses"
+                        buttonVariant="outline"
+                      />
+                    )}
                   </div>
                   
                   {isLoading ? (
@@ -339,11 +350,20 @@ export default function ProfilePage() {
                   ) : (
                     <div className="text-center py-8 border rounded-lg">
                       <p className="text-muted-foreground mb-4">You haven't added any favorite courses yet.</p>
-                      <Button 
-                        onClick={() => setIsBucketListModalOpen(true)}
-                      >
-                        Explore Courses
-                      </Button>
+                      <FavoriteCourseSelectionModal
+                        onCourseAdded={() => {
+                          // Refresh favorite courses after adding
+                          if (user?.id) {
+                            getFavoriteCourses(user.id).then(courses => {
+                              setFavoriteCourses(courses);
+                            });
+                          }
+                        }}
+                        maxFavorites={4}
+                        currentFavoriteCount={0}
+                        buttonText="Explore Courses"
+                        buttonVariant="default"
+                      />
                     </div>
                   )}
 

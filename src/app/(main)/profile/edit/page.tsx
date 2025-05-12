@@ -12,6 +12,7 @@ import { useToast } from "@/components/ui/use-toast"
 import { useUser } from "@/contexts/user-context"
 import { getProfileById, checkUsernameAvailability } from "@/lib/api/profiles"
 import { supabase } from "@/lib/supabase/client"
+import { FavoriteCourseSelector } from "@/components/profile/favorite-courses-selector"
 
 export default function EditProfilePage() {
   const { user, isLoading: isUserLoading } = useUser()
@@ -274,6 +275,13 @@ export default function EditProfilePage() {
                 </div>
               </div>
             </div>
+            
+            {/* Favorite Courses Section */}
+            {user?.id && (
+              <div className="pt-6">
+                <FavoriteCourseSelector userId={user.id} />
+              </div>
+            )}
             
             <div className="flex justify-end space-x-2">
               <Button
