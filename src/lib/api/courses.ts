@@ -162,4 +162,34 @@ export async function getCourseAverageRating(courseId: string) {
   
   const sum = data.reduce((acc, review) => acc + review.rating, 0);
   return sum / data.length;
+}
+
+// Get reviews for a specific user with course information
+export async function getUserReviews(userId: string) {
+  try {
+    const { data, error } = await supabase
+      .from('course_reviews')
+      .select(`
+        *,
+        course:course_id (
+          id,
+          name,
+          location,
+          province
+        )
+      `)
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false });
+    
+    if (error) {
+      console.error(`Error fetching reviews for user ${userId}:`, error);
+      throw error;
+    }
+    
+    return data || [];
+  } catch (err) {
+    console.error(`Exception in getUserReviews(${userId}):`, err);
+    // Return empty array instead of throwing to prevent the entire page from failing
+    return [];
+  }
 } 
