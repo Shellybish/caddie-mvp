@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
@@ -14,11 +14,24 @@ import { Switch } from "@/components/ui/switch"
 import { ChevronLeftIcon, PlusIcon, SearchIcon, Trash2Icon } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
 import { useUser } from "@/contexts/user-context"
+import { getAllCourses } from "@/lib/api/courses"
+import { createList, addCourseToList } from "@/lib/api/profiles"
+
+interface Course {
+  id: string
+  name: string
+  location: string
+  province: string
+  [key: string]: any
+}
 
 export default function CreateListPage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [selectedCourses, setSelectedCourses] = useState<any[]>([])
+  const [selectedCourses, setSelectedCourses] = useState<Course[]>([])
   const [searchQuery, setSearchQuery] = useState("")
+  const [allCourses, setAllCourses] = useState<Course[]>([])
+  const [filteredCourses, setFilteredCourses] = useState<Course[]>([])
+  const [isLoading, setIsLoading] = useState(true)
   const [formData, setFormData] = useState({
     title: "",
     description: "",
@@ -33,43 +46,45 @@ export default function CreateListPage() {
     router.push("/login")
   }
 
-  // Mock search results
-  const searchResults = [
-    {
-      id: "1",
-      name: "Fancourt Links",
-      location: "George, Western Cape",
-      image: "/placeholder.svg?height=100&width=100",
-    },
-    {
-      id: "2",
-      name: "Arabella Golf Club",
-      location: "Hermanus, Western Cape",
-      image: "/placeholder.svg?height=100&width=100",
-    },
-    {
-      id: "3",
-      name: "Pearl Valley Golf Estate",
-      location: "Paarl, Western Cape",
-      image: "/placeholder.svg?height=100&width=100",
-    },
-    {
-      id: "4",
-      name: "Royal Johannesburg & Kensington Golf Club",
-      location: "Johannesburg, Gauteng",
-      image: "/placeholder.svg?height=100&width=100",
-    },
-    {
-      id: "5",
-      name: "Durban Country Club",
-      location: "Durban, KwaZulu-Natal",
-      image: "/placeholder.svg?height=100&width=100",
-    },
-  ].filter(
-    (course) =>
-      course.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      course.location.toLowerCase().includes(searchQuery.toLowerCase()),
-  )
+  // Fetch all courses on component mount
+  useEffect(() => {
+    async function fetchCourses() {
+      setIsLoading(true)
+      try {
+        const courses = await getAllCourses()
+        setAllCourses(courses)
+        setFilteredCourses(courses)
+      } catch (error) {
+        console.error("Error fetching courses:", error)
+        toast({
+          title: "Error loading courses",
+          description: "There was a problem fetching courses. Please try again.",
+          variant: "destructive",
+        })
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    fetchCourses()
+  }, [toast])
+
+  // Filter courses based on search query
+  useEffect(() => {
+    if (!searchQuery.trim()) {
+      setFilteredCourses(allCourses)
+      return
+    }
+
+    const query = searchQuery.toLowerCase()
+    const filtered = allCourses.filter(
+      course =>
+        course.name.toLowerCase().includes(query) ||
+        course.location.toLowerCase().includes(query) ||
+        course.province.toLowerCase().includes(query)
+    )
+    setFilteredCourses(filtered)
+  }, [searchQuery, allCourses])
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { id, value } = e.target
@@ -80,7 +95,7 @@ export default function CreateListPage() {
     setFormData((prev) => ({ ...prev, isPublic: checked }))
   }
 
-  const handleAddCourse = (course: any) => {
+  const handleAddCourse = (course: Course) => {
     if (!selectedCourses.some((c) => c.id === course.id)) {
       setSelectedCourses([...selectedCourses, course])
     }
@@ -90,19 +105,57 @@ export default function CreateListPage() {
     setSelectedCourses(selectedCourses.filter((course) => course.id !== courseId))
   }
 
-  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+  const isInSelectedCourses = (courseId: string) => {
+    return selectedCourses.some(course => course.id === courseId)
+  }
+
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     setIsSubmitting(true)
 
-    // Simulate API call
-    setTimeout(() => {
-      setIsSubmitting(false)
+    try {
+      // Make sure user is logged in
+      if (!user) {
+        toast({
+          title: "Authentication required",
+          description: "You must be logged in to create a list.",
+          variant: "destructive",
+        })
+        router.push("/login")
+        return
+      }
+
+      // Create the list
+      const newList = await createList(
+        user.id,
+        formData.title,
+        formData.description,
+        formData.isPublic
+      )
+
+      // Add courses to the list
+      const addCoursesPromises = selectedCourses.map((course, index) => 
+        addCourseToList(newList.id, course.id, index + 1)
+      )
+      
+      await Promise.all(addCoursesPromises)
+
       toast({
         title: "List created successfully",
         description: "Your new list has been created.",
       })
+      
       router.push("/lists")
-    }, 1500)
+    } catch (error) {
+      console.error("Error creating list:", error)
+      toast({
+        title: "Error creating list",
+        description: "There was a problem creating your list. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   return (
@@ -164,40 +217,48 @@ export default function CreateListPage() {
                 />
               </div>
 
-              <div className="border rounded-md p-4">
+              <div className="border rounded-md p-4 max-h-[400px] overflow-y-auto">
                 <h4 className="text-sm font-medium mb-2">Search Results</h4>
-                {searchResults.length > 0 ? (
+                {isLoading ? (
+                  <div className="py-4 text-center">
+                    <p className="text-sm text-muted-foreground">Loading courses...</p>
+                  </div>
+                ) : filteredCourses.length === 0 ? (
+                  <div className="py-4 text-center">
+                    <p className="text-sm text-muted-foreground">No courses found</p>
+                  </div>
+                ) : (
                   <div className="space-y-2">
-                    {searchResults.map((course) => (
-                      <div key={course.id} className="flex items-center justify-between p-2 hover:bg-muted rounded-md">
-                        <div className="flex items-center gap-3">
-                          <div className="w-12 h-12 rounded overflow-hidden">
-                            <img
-                              src={course.image || "/placeholder.svg"}
-                              alt={course.name}
-                              className="w-full h-full object-cover"
-                            />
-                          </div>
-                          <div>
-                            <p className="text-sm font-medium">{course.name}</p>
-                            <p className="text-xs text-muted-foreground">{course.location}</p>
-                          </div>
+                    {filteredCourses.map((course) => (
+                      <div key={course.id} className="flex items-center justify-between p-3 rounded-md border hover:bg-muted/50">
+                        <div>
+                          <h4 className="font-medium">{course.name}</h4>
+                          <p className="text-sm text-muted-foreground">{course.location}, {course.province}</p>
                         </div>
                         <Button
                           type="button"
-                          variant="ghost"
+                          variant={isInSelectedCourses(course.id) ? "secondary" : "outline"}
                           size="sm"
-                          onClick={() => handleAddCourse(course)}
-                          disabled={selectedCourses.some((c) => c.id === course.id)}
+                          onClick={() => isInSelectedCourses(course.id) 
+                            ? handleRemoveCourse(course.id) 
+                            : handleAddCourse(course)
+                          }
                         >
-                          <PlusIcon className="h-4 w-4" />
-                          <span className="sr-only">Add course</span>
+                          {isInSelectedCourses(course.id) ? (
+                            <>
+                              <Trash2Icon className="h-4 w-4 mr-2" />
+                              Remove
+                            </>
+                          ) : (
+                            <>
+                              <PlusIcon className="h-4 w-4 mr-2" />
+                              Add
+                            </>
+                          )}
                         </Button>
                       </div>
                     ))}
                   </div>
-                ) : (
-                  <p className="text-sm text-muted-foreground">No courses found. Try a different search term.</p>
                 )}
               </div>
 
@@ -208,26 +269,24 @@ export default function CreateListPage() {
                 ) : (
                   <div className="space-y-2">
                     {selectedCourses.map((course, index) => (
-                      <div key={course.id} className="flex items-center justify-between p-2 hover:bg-muted rounded-md">
+                      <div key={course.id} className="flex items-center justify-between p-3 rounded-md border hover:bg-muted/50">
                         <div className="flex items-center gap-3">
                           <div className="w-6 h-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs font-medium">
                             {index + 1}
                           </div>
-                          <div className="w-12 h-12 rounded overflow-hidden">
-                            <img
-                              src={course.image || "/placeholder.svg"}
-                              alt={course.name}
-                              className="w-full h-full object-cover"
-                            />
-                          </div>
                           <div>
-                            <p className="text-sm font-medium">{course.name}</p>
-                            <p className="text-xs text-muted-foreground">{course.location}</p>
+                            <h4 className="font-medium">{course.name}</h4>
+                            <p className="text-sm text-muted-foreground">{course.location}, {course.province}</p>
                           </div>
                         </div>
-                        <Button type="button" variant="ghost" size="sm" onClick={() => handleRemoveCourse(course.id)}>
-                          <Trash2Icon className="h-4 w-4 text-destructive" />
-                          <span className="sr-only">Remove course</span>
+                        <Button 
+                          type="button" 
+                          variant="outline" 
+                          size="sm" 
+                          onClick={() => handleRemoveCourse(course.id)}
+                        >
+                          <Trash2Icon className="h-4 w-4 mr-2 text-destructive" />
+                          Remove
                         </Button>
                       </div>
                     ))}

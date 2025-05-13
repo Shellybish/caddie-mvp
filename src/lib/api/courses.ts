@@ -110,20 +110,50 @@ export async function getCoursesByProvince(province: string) {
 
 // Log a play and add a review
 export async function logPlayAndReview(courseId: string, userId: string, rating: number, reviewText?: string, datePlayed?: string) {
-  const { data, error } = await supabase
-    .from('course_reviews')
-    .insert({
-      course_id: courseId,
-      user_id: userId,
-      rating,
-      review_text: reviewText,
-      date_played: datePlayed || new Date().toISOString().split('T')[0]
-    })
-    .select()
-    .single();
+  console.log("logPlayAndReview called with:", {
+    courseId,
+    userId,
+    rating,
+    reviewText: reviewText ? (reviewText.length > 50 ? reviewText.substring(0, 50) + "..." : reviewText) : undefined,
+    datePlayed
+  });
   
-  if (error) throw error;
-  return data as CourseReview;
+  // Ensure we have a valid date format (YYYY-MM-DD)
+  let formattedDate = datePlayed;
+  
+  if (!formattedDate) {
+    formattedDate = new Date().toISOString().split('T')[0];
+  } else if (formattedDate.includes('T')) {
+    // If it's a full ISO date string, extract just the date part
+    formattedDate = formattedDate.split('T')[0];
+  }
+  
+  console.log("Using formatted date:", formattedDate);
+  
+  try {
+    const { data, error } = await supabase
+      .from('course_reviews')
+      .insert({
+        course_id: courseId,
+        user_id: userId,
+        rating,
+        review_text: reviewText,
+        date_played: formattedDate
+      })
+      .select()
+      .single();
+    
+    if (error) {
+      console.error("Error inserting course review:", error);
+      throw error;
+    }
+    
+    console.log("Successfully logged review:", data);
+    return data as CourseReview;
+  } catch (err) {
+    console.error("Exception in logPlayAndReview:", err);
+    throw err;
+  }
 }
 
 // Get reviews for a course

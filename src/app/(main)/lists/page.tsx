@@ -1,5 +1,6 @@
 "use client"
 
+import { useEffect, useState } from "react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -7,137 +8,147 @@ import { Input } from "@/components/ui/input"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { ListIcon, PlusIcon, SearchIcon, ThumbsUpIcon } from "lucide-react"
 import { useUser } from "@/contexts/user-context"
-import { useState } from "react"
+import { getListsByUserId, getListById, getPublicLists } from "@/lib/api/profiles"
+import { useToast } from "@/components/ui/use-toast"
+
+// Define proper type for list
+type ListWithCourses = {
+  id: string;
+  user_id: string;
+  title: string;
+  description: string;
+  is_public: boolean;
+  created_at: string;
+  list_courses: {
+    id: string;
+    course_id: string;
+    position: number;
+    courses: {
+      id: string;
+      name: string;
+      location: string;
+      province: string;
+      image_url?: string;
+      [key: string]: any;
+    };
+  }[];
+  author?: {
+    name: string;
+    image: string;
+  };
+};
 
 export default function ListsPage() {
   const { user } = useUser()
+  const { toast } = useToast()
   const [searchQuery, setSearchQuery] = useState("")
+  const [userLists, setUserLists] = useState<ListWithCourses[]>([])
+  const [publicLists, setPublicLists] = useState<ListWithCourses[]>([])
+  const [isLoading, setIsLoading] = useState(true)
 
-  // Mock data for user's lists
-  const userLists = user
-    ? [
-        {
-          id: "user1",
-          title: "My Favorite Courses",
-          description: "A collection of my personal favorite courses that I've played in South Africa.",
-          author: {
-            name: user.name,
-            image: user.image || "/placeholder.svg?height=40&width=40",
-          },
-          courseCount: 5,
-          likes: 8,
-          preview: [
-            "/placeholder.svg?height=100&width=100",
-            "/placeholder.svg?height=100&width=100",
-            "/placeholder.svg?height=100&width=100",
-          ],
-        },
-        {
-          id: "user2",
-          title: "Courses I Want to Play",
-          description: "My personal bucket list of courses I'm planning to play in the future.",
-          author: {
-            name: user.name,
-            image: user.image || "/placeholder.svg?height=40&width=40",
-          },
-          courseCount: 7,
-          likes: 3,
-          preview: [
-            "/placeholder.svg?height=100&width=100",
-            "/placeholder.svg?height=100&width=100",
-            "/placeholder.svg?height=100&width=100",
-          ],
-        },
-      ]
-    : []
+  // Fetch user's lists
+  useEffect(() => {
+    async function fetchUserLists() {
+      if (!user) return;
+      
+      try {
+        // Fetch user's lists with "includePrivate" set to true to get all lists
+        const lists = await getListsByUserId(user.id, true);
+        
+        // Fetch courses for each list
+        const listsWithCourses = await Promise.all(
+          lists.map(async (list) => {
+            const listWithCourses = await getListById(list.id);
+            return {
+              ...listWithCourses,
+              author: {
+                name: user.name || user.email || 'Anonymous',
+                image: user.image || "/placeholder.svg?height=40&width=40",
+              }
+            };
+          })
+        );
+        
+        setUserLists(listsWithCourses);
+      } catch (error) {
+        console.error("Error fetching user lists:", error);
+        toast({
+          title: "Error loading your lists",
+          description: "There was a problem fetching your lists. Please try again.",
+          variant: "destructive",
+        });
+      }
+    }
 
-  // Mock data for public lists
-  const publicLists = [
-    {
-      id: "1",
-      title: "Top 10 Courses in Western Cape",
-      description:
-        "The most beautiful and challenging courses in the Western Cape region, featuring stunning coastal and mountain views.",
-      author: {
-        name: "Golf Enthusiast",
-        image: "/placeholder.svg?height=40&width=40",
-      },
-      courseCount: 10,
-      likes: 24,
-      preview: [
-        "/placeholder.svg?height=100&width=100",
-        "/placeholder.svg?height=100&width=100",
-        "/placeholder.svg?height=100&width=100",
-      ],
-    },
-    {
-      id: "2",
-      title: "Best Value Courses in Gauteng",
-      description:
-        "Great golf experiences that won't break the bank. These courses offer excellent conditions and layouts at reasonable green fees.",
-      author: {
-        name: "Budget Golfer",
-        image: "/placeholder.svg?height=40&width=40",
-      },
-      courseCount: 8,
-      likes: 18,
-      preview: [
-        "/placeholder.svg?height=100&width=100",
-        "/placeholder.svg?height=100&width=100",
-        "/placeholder.svg?height=100&width=100",
-      ],
-    },
-    {
-      id: "3",
-      title: "Must-Play Coastal Courses",
-      description:
-        "Spectacular seaside courses with ocean views and challenging winds. A bucket list for any serious golfer visiting South Africa.",
-      author: {
-        name: "Ocean Lover",
-        image: "/placeholder.svg?height=40&width=40",
-      },
-      courseCount: 12,
-      likes: 32,
-      preview: [
-        "/placeholder.svg?height=100&width=100",
-        "/placeholder.svg?height=100&width=100",
-        "/placeholder.svg?height=100&width=100",
-      ],
-    },
-    {
-      id: "4",
-      title: "Hidden Gems of KwaZulu-Natal",
-      description:
-        "Lesser-known but exceptional courses in KZN that deserve more recognition. Avoid the crowds and discover these treasures.",
-      author: {
-        name: "Local Expert",
-        image: "/placeholder.svg?height=40&width=40",
-      },
-      courseCount: 7,
-      likes: 15,
-      preview: [
-        "/placeholder.svg?height=100&width=100",
-        "/placeholder.svg?height=100&width=100",
-        "/placeholder.svg?height=100&width=100",
-      ],
-    },
-  ]
+    fetchUserLists();
+  }, [user, toast]);
+
+  // Fetch public lists (this could be from a different API endpoint in the future)
+  useEffect(() => {
+    async function fetchPublicLists() {
+      setIsLoading(true);
+      try {
+        const lists = await getPublicLists(10, 0);
+        
+        // Format the public lists
+        const formattedLists = lists.map((list: any) => {
+          return {
+            ...list,
+            author: {
+              name: list.profiles?.full_name || list.profiles?.username || 'Anonymous',
+              image: list.profiles?.avatar_url || "/placeholder.svg?height=40&width=40",
+            }
+          };
+        });
+        
+        setPublicLists(formattedLists);
+      } catch (error) {
+        console.error("Error fetching public lists:", error);
+        toast({
+          title: "Error loading public lists",
+          description: "There was a problem fetching public lists. Please try again.",
+          variant: "destructive",
+        });
+      } finally {
+        setIsLoading(false);
+      }
+    }
+
+    fetchPublicLists();
+  }, [toast]);
 
   // Filter lists based on search query
   const filteredUserLists = userLists.filter(
     (list) =>
       list.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      list.description.toLowerCase().includes(searchQuery.toLowerCase()),
-  )
+      (list.description && list.description.toLowerCase().includes(searchQuery.toLowerCase()))
+  );
 
   const filteredPublicLists = publicLists.filter(
     (list) =>
       list.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      list.description.toLowerCase().includes(searchQuery.toLowerCase()),
-  )
+      (list.description && list.description.toLowerCase().includes(searchQuery.toLowerCase()))
+  );
+
+  // Helper to get preview images from a list
+  const getListPreviewImages = (list: ListWithCourses) => {
+    if (!list.list_courses || list.list_courses.length === 0) {
+      return ["/placeholder.svg?height=100&width=100"];
+    }
+    
+    return list.list_courses
+      .sort((a, b) => a.position - b.position)
+      .slice(0, 3)
+      .map(course => course.courses?.image_url || "/placeholder.svg?height=100&width=100");
+  };
+
+  // Helper to get course count from a list
+  const getListCourseCount = (list: ListWithCourses) => {
+    return list.list_courses?.length || 0;
+  };
 
   // Render a list card
-  const renderListCard = (list: any) => (
+  const renderListCard = (list: ListWithCourses) => (
     <Card key={list.id} className="overflow-hidden">
       <CardContent className="p-0">
         <div className="p-4 space-y-3">
@@ -147,37 +158,37 @@ export default function ListsPage() {
               <div className="flex items-center text-sm text-muted-foreground gap-2">
                 <div className="flex items-center">
                   <Avatar className="h-5 w-5 mr-1">
-                    <AvatarImage src={list.author.image || "/placeholder.svg"} alt={list.author.name} />
-                    <AvatarFallback>{list.author.name.substring(0, 2).toUpperCase()}</AvatarFallback>
+                    <AvatarImage src={list.author?.image || "/placeholder.svg"} alt={list.author?.name || "User"} />
+                    <AvatarFallback>{(list.author?.name || "User").substring(0, 2).toUpperCase()}</AvatarFallback>
                   </Avatar>
-                  {list.author.name}
+                  {list.author?.name || "User"}
                 </div>
                 <span>•</span>
                 <div className="flex items-center">
                   <ListIcon className="h-3.5 w-3.5 mr-1" />
-                  {list.courseCount} courses
+                  {getListCourseCount(list)} courses
                 </div>
               </div>
             </div>
             <div className="flex items-center text-muted-foreground">
               <ThumbsUpIcon className="h-4 w-4 mr-1" />
-              {list.likes}
+              {0} {/* Likes will be implemented later */}
             </div>
           </div>
           <p className="text-sm text-muted-foreground line-clamp-2">{list.description}</p>
           <div className="flex gap-2 pt-1">
-            {list.preview.map((image: string, index: number) => (
+            {getListPreviewImages(list).map((image: string, index: number) => (
               <div key={index} className="w-20 h-14 rounded overflow-hidden">
                 <img
-                  src={image || "/placeholder.svg"}
+                  src={image}
                   alt={`Preview ${index + 1}`}
                   className="w-full h-full object-cover"
                 />
               </div>
             ))}
-            {list.courseCount > 3 && (
+            {getListCourseCount(list) > 3 && (
               <div className="w-20 h-14 rounded bg-muted flex items-center justify-center text-muted-foreground">
-                +{list.courseCount - 3}
+                +{getListCourseCount(list) - 3}
               </div>
             )}
           </div>
@@ -187,7 +198,7 @@ export default function ListsPage() {
         </div>
       </CardContent>
     </Card>
-  )
+  );
 
   return (
     <div className="container py-8 md:py-12">
@@ -228,7 +239,9 @@ export default function ListsPage() {
             </Button>
           </div>
 
-          {filteredUserLists.length > 0 ? (
+          {isLoading ? (
+            <div className="text-center py-8">Loading your lists...</div>
+          ) : filteredUserLists.length > 0 ? (
             <div className="grid md:grid-cols-2 gap-6 mb-10">{filteredUserLists.map(renderListCard)}</div>
           ) : (
             <Card className="mb-10">
@@ -254,7 +267,9 @@ export default function ListsPage() {
         <h2 className="text-xl font-bold">Public Lists</h2>
       </div>
 
-      {filteredPublicLists.length > 0 ? (
+      {isLoading ? (
+        <div className="text-center py-8">Loading public lists...</div>
+      ) : filteredPublicLists.length > 0 ? (
         <div className="grid md:grid-cols-2 gap-6">{filteredPublicLists.map(renderListCard)}</div>
       ) : (
         <Card>

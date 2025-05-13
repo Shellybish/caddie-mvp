@@ -647,4 +647,30 @@ export async function updateBucketListPositions(userId: string, orderedCourseIds
     console.error('Error updating bucket list positions:', error);
     throw error;
   }
+}
+
+// Get public lists from all users
+export async function getPublicLists(limit: number = 10, offset: number = 0) {
+  const { data, error } = await supabase
+    .from('lists')
+    .select(`
+      *,
+      profiles:user_id (
+        username,
+        full_name,
+        avatar_url
+      ),
+      list_courses:id (
+        id,
+        course_id,
+        position,
+        courses:course_id (*)
+      )
+    `)
+    .eq('is_public', true)
+    .order('created_at', { ascending: false })
+    .range(offset, offset + limit - 1);
+    
+  if (error) throw error;
+  return data;
 } 

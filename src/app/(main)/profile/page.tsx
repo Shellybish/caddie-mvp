@@ -20,9 +20,10 @@ import {
   BookmarkIcon,
   BarChart2Icon,
   GripVertical,
+  X,
 } from "lucide-react"
 import { useUser } from "@/contexts/user-context"
-import { getProfileById, getUserStats, getFavoriteCourses, getBucketListCourses, updateFavoriteCoursePositions, getListsByUserId, getListById } from "@/lib/api/profiles"
+import { getProfileById, getUserStats, getFavoriteCourses, getBucketListCourses, updateFavoriteCoursePositions, getListsByUserId, getListById, removeFavoriteCourse, removeBucketListCourse } from "@/lib/api/profiles"
 import { getUserReviews } from "@/lib/api/courses"
 import { BucketListSearchModal } from "@/components/courses/bucket-list-search-modal"
 import { FavoriteCourseSelectionModal } from "@/components/courses/favorite-course-selector-modal"
@@ -51,9 +52,10 @@ interface UserReview {
 // Define a SortableFavoriteCourse component
 interface SortableFavoriteCourseProps {
   favorite: any;
+  onRemove: (courseId: string) => void;
 }
 
-function SortableFavoriteCourse({ favorite }: SortableFavoriteCourseProps) {
+function SortableFavoriteCourse({ favorite, onRemove }: SortableFavoriteCourseProps) {
   const {
     attributes,
     listeners,
@@ -68,6 +70,11 @@ function SortableFavoriteCourse({ favorite }: SortableFavoriteCourseProps) {
     transition,
     zIndex: isDragging ? 10 : 1,
     opacity: isDragging ? 0.8 : 1,
+  };
+
+  const handleRemove = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onRemove(favorite.course_id);
   };
 
   return (
@@ -90,6 +97,12 @@ function SortableFavoriteCourse({ favorite }: SortableFavoriteCourseProps) {
           >
             <GripVertical className="h-4 w-4" />
           </div>
+          <button
+            onClick={handleRemove}
+            className="absolute top-2 left-2 bg-black/50 text-white p-1 rounded-md cursor-pointer opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/70"
+          >
+            <X className="h-4 w-4" />
+          </button>
         </div>
         <div className="p-4">
           <h3 className="font-medium truncate">
@@ -341,6 +354,50 @@ export default function ProfilePage() {
     }
   };
 
+  // Handle removing a favorite course
+  const handleRemoveFavoriteCourse = async (courseId: string) => {
+    if (!user?.id) return;
+    
+    try {
+      await removeFavoriteCourse(user.id, courseId);
+      // Update local state
+      setFavoriteCourses(prev => prev.filter(item => item.course_id !== courseId));
+      toast({
+        title: "Course removed",
+        description: "Course removed from favorites",
+      });
+    } catch (error) {
+      console.error("Error removing favorite course:", error);
+      toast({
+        title: "Error",
+        description: "Failed to remove course from favorites",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Handle removing a bucket list course
+  const handleRemoveBucketListCourse = async (courseId: string) => {
+    if (!user?.id) return;
+    
+    try {
+      await removeBucketListCourse(user.id, courseId);
+      // Update local state
+      setBucketListCourses(prev => prev.filter(item => item.course_id !== courseId));
+      toast({
+        title: "Course removed",
+        description: "Course removed from bucket list",
+      });
+    } catch (error) {
+      console.error("Error removing bucket list course:", error);
+      toast({
+        title: "Error",
+        description: "Failed to remove course from bucket list",
+        variant: "destructive",
+      });
+    }
+  };
+
   return (
     <div className="container py-8 md:py-12">
       <div className="flex flex-col lg:flex-row gap-8">
@@ -487,7 +544,11 @@ export default function ProfilePage() {
                       >
                         <div className="grid grid-cols-2 gap-4">
                           {favoriteCourses.slice(0, 4).map((favorite) => (
-                            <SortableFavoriteCourse key={favorite.id} favorite={favorite} />
+                            <SortableFavoriteCourse 
+                              key={favorite.id} 
+                              favorite={favorite} 
+                              onRemove={handleRemoveFavoriteCourse}
+                            />
                           ))}
                         </div>
                       </SortableContext>
@@ -693,7 +754,7 @@ export default function ProfilePage() {
                       ) : bucketListCourses && bucketListCourses.length > 0 ? (
                         <div className="space-y-3">
                           {bucketListCourses.slice(0, 5).map((course) => (
-                            <div key={course.id} className="flex items-center gap-3">
+                            <div key={course.id} className="flex items-center gap-3 group">
                               <div className="w-12 h-12 rounded overflow-hidden bg-muted">
                                 <img 
                                   src="/placeholder.svg?height=50&width=50" 
@@ -711,6 +772,12 @@ export default function ProfilePage() {
                                   {course.courses?.location || "Unknown Location"}
                                 </p>
                               </div>
+                              <button
+                                onClick={() => handleRemoveBucketListCourse(course.course_id)}
+                                className="p-1.5 text-muted-foreground hover:text-destructive rounded-md opacity-0 group-hover:opacity-100 transition-opacity"
+                              >
+                                <X className="h-4 w-4" />
+                              </button>
                             </div>
                           ))}
                           {bucketListCourses.length > 5 && (

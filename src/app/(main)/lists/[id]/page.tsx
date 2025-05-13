@@ -4,7 +4,8 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { StarRating } from "@/components/common/star-rating"
 import { ChevronLeftIcon, ListIcon, MapPinIcon, Share2Icon, ThumbsUpIcon, UserIcon } from "lucide-react"
-import { getListById } from "@/lib/api/profiles"
+import { getListById, getProfileById, getListsByUserId } from "@/lib/api/profiles"
+import { getCourseAverageRating } from "@/lib/api/courses"
 import { type List } from "@/lib/api/profiles"
 
 // Define the extended list type with UI-specific properties
@@ -12,10 +13,11 @@ type ExtendedList = List & {
   author: {
     id: string;
     name: string;
+    username: string;
     image?: string;
   };
   courseCount: number;
-  likes: number;
+  likes?: number;
   courses: Array<{
     id: string;
     name: string;
@@ -27,36 +29,58 @@ type ExtendedList = List & {
 }
 
 export default async function ListDetailPage({ params }: { params: { id: string } }) {
+  // Properly await params to fix the Next.js 15.2.4 warning
+  const resolvedParams = await Promise.resolve(params);
+  const listId = resolvedParams.id;
+  
   // Try to fetch the list from the database
   let list: ExtendedList;
+  let otherListsByAuthor: List[] = [];
   
   try {
-    const dbList = await getListById(params.id);
-    // Transform to ExtendedList with UI properties
-    // This would normally include processing the database result
+    // Get the list data
+    const dbList = await getListById(listId);
     
+    // Get the creator's profile
+    const profile = await getProfileById(dbList.user_id);
+    
+    // Get ratings for each course
+    const coursesWithRatings = await Promise.all(
+      dbList.list_courses?.map(async (item: any) => {
+        const rating = await getCourseAverageRating(item.course_id);
+        return {
+          id: item.courses.id,
+          name: item.courses.name,
+          location: `${item.courses.location}, ${item.courses.province}`,
+          rating: rating,
+          image: "/placeholder.svg?height=200&width=400",
+          description: item.courses.description
+        };
+      }) || []
+    );
+    
+    // Get other lists by the same user
+    const userLists = await getListsByUserId(dbList.user_id, true);
+    otherListsByAuthor = userLists.filter(otherList => otherList.id !== dbList.id).slice(0, 3);
+    
+    // Transform to ExtendedList with UI properties
     list = {
       ...dbList,
       author: {
         id: dbList.user_id,
-        name: "Golf Enthusiast", // This would be fetched from the profile in a real implementation
-        image: "/placeholder.svg?height=40&width=40",
+        name: profile.full_name || profile.username,
+        username: profile.username,
+        image: profile.avatar_url || "/placeholder.svg?height=40&width=40",
       },
       courseCount: dbList.list_courses?.length || 0,
-      likes: 24, // This would be calculated from the database
-      courses: dbList.list_courses?.map((item: any) => ({
-        id: item.courses.id,
-        name: item.courses.name,
-        location: item.courses.location,
-        rating: 4.5, // This would be calculated
-        image: "/placeholder.svg?height=200&width=400",
-        description: item.courses.description
-      })) || []
+      likes: undefined, // We don't have likes functionality yet
+      courses: coursesWithRatings
     } as ExtendedList;
   } catch (error) {
+    console.error("Error fetching list:", error);
     // If list not found or error, use mock data as fallback
     list = {
-      id: params.id,
+      id: listId,
       user_id: "user1", // Required for List type
       is_public: true, // Required for List type
       created_at: new Date().toISOString(), // Required for List type
@@ -65,17 +89,18 @@ export default async function ListDetailPage({ params }: { params: { id: string 
         "The most beautiful and challenging courses in the Western Cape region, featuring stunning coastal and mountain views. These courses offer a perfect blend of scenic beauty and golfing challenge.",
       author: {
         id: "user1",
-        name: "Golf Enthusiast",
+        name: "User",
+        username: "user",
         image: "/placeholder.svg?height=40&width=40",
       },
       courseCount: 10,
-      likes: 24,
+      likes: undefined,
       courses: [
         {
           id: "1",
           name: "Fancourt Links",
           location: "George, Western Cape",
-          rating: 4.9,
+          rating: 0,
           image: "/placeholder.svg?height=200&width=400",
           description:
             "Designed by Gary Player, this championship course is consistently ranked as South Africa's best. The links-style layout offers a true test of golf in a spectacular setting.",
@@ -84,38 +109,12 @@ export default async function ListDetailPage({ params }: { params: { id: string 
           id: "2",
           name: "Arabella Golf Club",
           location: "Hermanus, Western Cape",
-          rating: 4.6,
+          rating: 0,
           image: "/placeholder.svg?height=200&width=400",
           description:
             "Set alongside the Bot River Lagoon with the Kogelberg Mountains as a backdrop, Arabella is one of the most picturesque courses in the country. The closing stretch of holes along the lagoon is particularly memorable.",
         },
-        {
-          id: "3",
-          name: "Pearl Valley Golf Estate",
-          location: "Paarl, Western Cape",
-          rating: 4.7,
-          image: "/placeholder.svg?height=200&width=400",
-          description:
-            "This Jack Nicklaus signature course is set in the beautiful Franschhoek Valley, surrounded by mountains and vineyards. The course features numerous water hazards and well-placed bunkers.",
-        },
-        {
-          id: "4",
-          name: "Erinvale Golf Club",
-          location: "Somerset West, Western Cape",
-          rating: 4.5,
-          image: "/placeholder.svg?height=200&width=400",
-          description:
-            "Designed by Gary Player, Erinvale has hosted the World Cup of Golf and offers stunning views of False Bay and the Hottentots Holland Mountains. The back nine climbs into the foothills, providing dramatic elevation changes.",
-        },
-        {
-          id: "5",
-          name: "Steenberg Golf Club",
-          location: "Cape Town, Western Cape",
-          rating: 4.8,
-          image: "/placeholder.svg?height=200&width=400",
-          description:
-            "Set in the oldest wine farm in the Cape, Steenberg offers a parkland-style course with mountain backdrops and challenging water features. The course is known for its excellent conditioning year-round.",
-        },
+        // ... more courses
       ],
     }
   }
@@ -136,9 +135,9 @@ export default async function ListDetailPage({ params }: { params: { id: string 
               <div className="flex items-center">
                 <Avatar className="h-6 w-6 mr-2">
                   <AvatarImage src={list.author.image || "/placeholder.svg"} alt={list.author.name} />
-                  <AvatarFallback>{list.author.name.substring(0, 2).toUpperCase()}</AvatarFallback>
+                  <AvatarFallback>{list.author.username.substring(0, 2).toUpperCase()}</AvatarFallback>
                 </Avatar>
-                <Link href={`/users/${list.author.id}`} className="text-sm font-medium hover:underline">
+                <Link href={`/profile/${list.author.username}`} className="text-sm font-medium hover:underline">
                   {list.author.name}
                 </Link>
               </div>
@@ -146,10 +145,12 @@ export default async function ListDetailPage({ params }: { params: { id: string 
                 <ListIcon className="h-4 w-4 mr-1" />
                 {list.courseCount} courses
               </div>
-              <div className="flex items-center text-sm text-muted-foreground">
-                <ThumbsUpIcon className="h-4 w-4 mr-1" />
-                {list.likes} likes
-              </div>
+              {list.likes !== undefined && (
+                <div className="flex items-center text-sm text-muted-foreground">
+                  <ThumbsUpIcon className="h-4 w-4 mr-1" />
+                  {list.likes} likes
+                </div>
+              )}
             </div>
             <p className="text-muted-foreground">{list.description}</p>
           </div>
@@ -180,7 +181,9 @@ export default async function ListDetailPage({ params }: { params: { id: string 
                         </div>
                         <div className="flex items-center">
                           <StarRating rating={course.rating} />
-                          <span className="text-sm text-muted-foreground ml-1">{course.rating}</span>
+                          <span className="text-sm text-muted-foreground ml-1">
+                            {course.rating ? course.rating.toFixed(1) : "N/A"}
+                          </span>
                         </div>
                       </div>
                       <p className="text-sm text-muted-foreground">{course.description}</p>
@@ -224,22 +227,23 @@ export default async function ListDetailPage({ params }: { params: { id: string 
             </CardContent>
           </Card>
 
-          <Card>
-            <CardContent className="p-4 space-y-4">
-              <h3 className="font-medium">More by {list.author.name}</h3>
-              <div className="space-y-3">
-                <Link href="#" className="block hover:underline">
-                  Best Value Courses in South Africa
-                </Link>
-                <Link href="#" className="block hover:underline">
-                  Golf Courses with Mountain Views
-                </Link>
-                <Link href="#" className="block hover:underline">
-                  Must-Play Courses for Visitors
-                </Link>
-              </div>
-            </CardContent>
-          </Card>
+          {otherListsByAuthor.length > 0 && (
+            <Card>
+              <CardContent className="p-4 space-y-4">
+                <h3 className="font-medium">More by {list.author.name}</h3>
+                <div className="space-y-3">
+                  {otherListsByAuthor.map(otherList => (
+                    <Link key={otherList.id} href={`/lists/${otherList.id}`} className="block hover:underline">
+                      {otherList.title}
+                    </Link>
+                  ))}
+                  {otherListsByAuthor.length === 0 && (
+                    <p className="text-sm text-muted-foreground">No other lists from this user</p>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           <Card>
             <CardContent className="p-4 space-y-4">
@@ -249,10 +253,10 @@ export default async function ListDetailPage({ params }: { params: { id: string 
                   Top Courses in KwaZulu-Natal
                 </Link>
                 <Link href="#" className="block hover:underline">
-                  Best Coastal Courses in South Africa
+                  Best Value Courses Under R500
                 </Link>
                 <Link href="#" className="block hover:underline">
-                  Championship Courses Worth Playing
+                  Most Challenging Courses
                 </Link>
               </div>
             </CardContent>
@@ -260,5 +264,5 @@ export default async function ListDetailPage({ params }: { params: { id: string 
         </div>
       </div>
     </div>
-  )
+  );
 }
