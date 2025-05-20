@@ -34,6 +34,35 @@ export type CourseReview = {
   created_at: string;
 };
 
+// Types for featured courses from RPC functions
+export type HighRatedCourse = {
+  id: string;
+  name: string;
+  location: string | null;
+  province: string | null;
+  avg_rating: number | string;
+  review_count: number | string;
+}
+
+export type TrendingCourse = {
+  id: string;
+  name: string;
+  location: string | null;
+  province: string | null;
+  latest_review: string;
+  review_count: number | string;
+  avg_rating: number | string;
+}
+
+export type HiddenGemCourse = {
+  id: string;
+  name: string;
+  location: string | null;
+  province: string | null;
+  avg_rating: number | string;
+  review_count: number | string;
+}
+
 // Fetch all courses
 export async function getAllCourses() {
   const { data, error } = await supabase
@@ -220,6 +249,66 @@ export async function getUserReviews(userId: string) {
   } catch (err) {
     console.error(`Exception in getUserReviews(${userId}):`, err);
     // Return empty array instead of throwing to prevent the entire page from failing
+    return [];
+  }
+}
+
+// Get highest rated courses (minimum 3 reviews, rating at least 4.7)
+export async function getHighestRatedCourses(limit = 1): Promise<HighRatedCourse[]> {
+  try {
+    // This uses a custom SQL function to get courses with avg rating > 4.7 and min 3 reviews
+    const { data, error } = await supabase
+      .rpc('get_highest_rated_courses')
+      .limit(limit);
+
+    if (error) {
+      console.error('Error fetching highest rated courses:', error);
+      throw error;
+    }
+    
+    return data || [];
+  } catch (err) {
+    console.error('Exception in getHighestRatedCourses:', err);
+    return [];
+  }
+}
+
+// Get trending courses (most recent reviews/activity)
+export async function getTrendingCourses(limit = 1): Promise<TrendingCourse[]> {
+  try {
+    // This query gets courses with most recent review activity
+    const { data, error } = await supabase
+      .rpc('get_trending_courses')
+      .limit(limit);
+    
+    if (error) {
+      console.error('Error fetching trending courses:', error);
+      throw error;
+    }
+    
+    return data || [];
+  } catch (err) {
+    console.error('Exception in getTrendingCourses:', err);
+    return [];
+  }
+}
+
+// Get hidden gem courses (highly rated but fewer reviews)
+export async function getHiddenGemCourses(limit = 1): Promise<HiddenGemCourse[]> {
+  try {
+    // This uses a custom SQL function to find courses with good ratings but fewer reviews
+    const { data, error } = await supabase
+      .rpc('get_hidden_gem_courses')
+      .limit(limit);
+    
+    if (error) {
+      console.error('Error fetching hidden gem courses:', error);
+      throw error;
+    }
+    
+    return data || [];
+  } catch (err) {
+    console.error('Exception in getHiddenGemCourses:', err);
     return [];
   }
 } 
