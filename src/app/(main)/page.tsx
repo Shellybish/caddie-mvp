@@ -203,7 +203,7 @@ export default async function HomePage() {
                   <div className="mb-2">Discover & save those you want to.</div>
                   <div>Tell your friends what's good.</div>
                 </h1>
-                <p className="text-lg text-primary-foreground/80 mt-3">The social network for golf lovers.</p>
+                <p className="text-lg text-primary-foreground/80 mt-3">The social network for South African golf lovers.</p>
               </div>
               <div className="pt-2">
                 <Button asChild size="lg" className="bg-white text-primary hover:bg-white/90">
@@ -231,7 +231,7 @@ export default async function HomePage() {
                 <ClipboardIcon className="h-6 w-6 text-primary" />
               </div>
               <h3 className="text-lg font-bold">Track Your Golf Journey</h3>
-              <p className="text-sm text-muted-foreground">Log every course you play and build your golf passport</p>
+              <p className="text-sm text-muted-foreground">Log every play and build your golf passport</p>
             </div>
             <div className="flex flex-col items-center text-center space-y-2">
               <div className="bg-primary/10 p-3 rounded-full">
@@ -245,14 +245,14 @@ export default async function HomePage() {
                 <ListIcon className="h-6 w-6 text-primary" />
               </div>
               <h3 className="text-lg font-bold">Create Dream Course Lists</h3>
-              <p className="text-sm text-muted-foreground">Organize your bucket list and favorite courses</p>
+              <p className="text-sm text-muted-foreground">Organise your bucket list and favorite courses</p>
             </div>
             <div className="flex flex-col items-center text-center space-y-2">
               <div className="bg-primary/10 p-3 rounded-full">
                 <Share2Icon className="h-6 w-6 text-primary" />
               </div>
               <h3 className="text-lg font-bold">Share Your Experiences</h3>
-              <p className="text-sm text-muted-foreground">Rate, review and become a trusted voice in the community</p>
+              <p className="text-sm text-muted-foreground">Rate, review and become a trusted voice</p>
             </div>
           </div>
         </div>
