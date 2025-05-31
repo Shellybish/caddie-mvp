@@ -9,7 +9,9 @@ import { MapPinIcon, SearchIcon } from "lucide-react"
 import { getAllCourses, getCourseReviews, getCourseAverageRating } from "@/lib/api/courses"
 import { useCourseSearch } from "@/hooks/use-course-search"
 import { useCourseFilters } from "@/hooks/use-course-filters"
+import { useCourseSort } from "@/hooks/use-course-sort"
 import { CourseFilters } from "@/components/courses/course-filters"
+import { CourseSort } from "@/components/courses/course-sort"
 import { useEffect, useState, useCallback } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
 
@@ -51,10 +53,11 @@ export default function CoursesPage() {
   // Get search term from URL parameters
   const urlSearchTerm = searchParams.get('search') || ''
   
-  // Use the filter hooks
+  // Use the hooks
   const { filters, updateFilters, clearFilters, hasActiveFilters } = useCourseFilters()
+  const { currentSort, updateSort, sortCourses, getSortLabel } = useCourseSort()
   
-  // Use the course search hook with filter integration
+  // Use the course search hook with filter and sort integration
   const {
     searchTerm,
     setSearchTerm,
@@ -64,7 +67,11 @@ export default function CoursesPage() {
     clearSearch,
     hasResults,
     isEmpty
-  } = useCourseSearch(filters)
+  } = useCourseSearch({
+    province: filters.province,
+    minRating: filters.minRating,
+    sort: currentSort
+  })
 
   // Load all courses and available provinces on mount
   useEffect(() => {
@@ -155,11 +162,12 @@ export default function CoursesPage() {
     params.delete('search')
     params.delete('province')
     params.delete('minRating')
+    params.delete('sort')
     const newUrl = `${window.location.pathname}${params.toString() ? `?${params.toString()}` : ''}`
     window.history.replaceState({}, '', newUrl)
   }, [clearSearch, clearFilters, searchParams])
 
-  // Filter all courses based on current filters when not searching
+  // Filter and sort all courses based on current filters when not searching
   const getFilteredCourses = () => {
     if (hasResults) {
       // Convert search results to CourseWithRating format
@@ -211,16 +219,17 @@ export default function CoursesPage() {
     
     // Apply filters to all courses when not searching
     if (!searchTerm && hasActiveFilters) {
-      return allCourses.filter(course => {
+      const filtered = allCourses.filter(course => {
         const provinceMatch = !filters.province || course.province === filters.province
         const ratingMatch = !filters.minRating || course.rating >= filters.minRating
         return provinceMatch && ratingMatch
       })
+      return sortCourses(filtered)
     }
     
     // Only show all courses when there's no search term and no active filters
     if (!searchTerm && !hasActiveFilters) {
-      return allCourses
+      return sortCourses(allCourses)
     }
     
     // Default fallback for any other case (shouldn't happen)
@@ -234,7 +243,11 @@ export default function CoursesPage() {
   // Generate results description
   const getResultsDescription = () => {
     if (hasResults) {
-      return `Found ${results.length} course${results.length === 1 ? '' : 's'} matching "${searchTerm}"`
+      let description = `Found ${results.length} course${results.length === 1 ? '' : 's'} matching "${searchTerm}"`
+      if (currentSort !== 'rating_desc') {
+        description += `, sorted by ${getSortLabel()}`
+      }
+      return description
     }
     
     if (hasActiveFilters && !searchTerm) {
@@ -245,10 +258,17 @@ export default function CoursesPage() {
       if (filters.minRating > 0) {
         description += ` with ${filters.minRating}+ star${filters.minRating === 1 ? '' : 's'}`
       }
+      if (currentSort !== 'rating_desc') {
+        description += `, sorted by ${getSortLabel()}`
+      }
       return description
     }
     
-    return 'Discover and explore golf courses across South Africa'
+    let description = 'Discover and explore golf courses across South Africa'
+    if (coursesToDisplay.length > 0 && currentSort !== 'rating_desc') {
+      description += `, sorted by ${getSortLabel()}`
+    }
+    return description
   }
 
   return (
@@ -270,6 +290,10 @@ export default function CoursesPage() {
               onChange={handleSearchChange}
             />
           </div>
+          <CourseSort
+            currentSort={currentSort}
+            onSortChange={updateSort}
+          />
           <CourseFilters
             isOpen={isFiltersOpen}
             onToggle={() => setIsFiltersOpen(!isFiltersOpen)}

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useDebounce } from '@/lib/hooks/use-debounce'
+import { SortOption } from './use-course-sort'
 
 export type SearchResult = {
   id: string
@@ -14,6 +15,7 @@ export type SearchResult = {
 interface SearchOptions {
   province?: string
   minRating?: number
+  sort?: SortOption
 }
 
 export function useCourseSearch(options?: SearchOptions) {
@@ -56,6 +58,10 @@ export function useCourseSearch(options?: SearchOptions) {
           params.set('minRating', options.minRating.toString())
         }
         
+        if (options?.sort) {
+          params.set('sort', options.sort)
+        }
+        
         const response = await fetch(`/api/search/courses?${params.toString()}`)
         
         if (!response.ok) {
@@ -74,7 +80,7 @@ export function useCourseSearch(options?: SearchOptions) {
     }
     
     performSearch()
-  }, [debouncedSearchTerm, options?.province, options?.minRating])
+  }, [debouncedSearchTerm, options?.province, options?.minRating, options?.sort])
   
   // Memoize clearSearch to prevent infinite re-renders in components that depend on it
   const clearSearch = useCallback(() => {

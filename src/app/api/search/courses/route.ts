@@ -7,6 +7,7 @@ export async function GET(request: Request) {
     const query = searchParams.get('q')
     const province = searchParams.get('province')
     const minRatingParam = searchParams.get('minRating')
+    const sortParam = searchParams.get('sort') || 'rating_desc'
     const minRating = minRatingParam ? parseInt(minRatingParam) : 0
     
     // Check if we have any meaningful search criteria
@@ -72,11 +73,10 @@ export async function GET(request: Request) {
             ? ratings.reduce((sum, review) => sum + review.rating, 0) / ratings.length
             : 0
           
-          // Calculate relevance score (exact matches first, then partial)
+          // Calculate relevance score for search queries only
           let relevanceScore = 0
           
-          // Only calculate relevance if there's a search query
-          if (query && query.trim().length > 0) {
+          if (hasSearchQuery) {
             const searchTerm = query.trim().toLowerCase()
             const lowerName = course.name.toLowerCase()
             const lowerLocation = course.location?.toLowerCase() || ''
@@ -98,9 +98,6 @@ export async function GET(request: Request) {
             if (lowerLocation.includes(searchTerm)) relevanceScore += 15
             if (lowerProvince.includes(searchTerm)) relevanceScore += 10
             if (lowerDescription.includes(searchTerm)) relevanceScore += 5
-          } else {
-            // For non-search requests (filter only), use rating as relevance score
-            relevanceScore = averageRating * 20
           }
           
           return {
@@ -108,6 +105,7 @@ export async function GET(request: Request) {
             name: course.name,
             location: course.location,
             province: course.province,
+            created_at: course.created_at,
             average_rating: Math.round(averageRating * 10) / 10, // Round to 1 decimal
             total_reviews: ratings.length,
             relevance_score: relevanceScore
@@ -119,6 +117,7 @@ export async function GET(request: Request) {
             name: course.name,
             location: course.location,
             province: course.province,
+            created_at: course.created_at,
             average_rating: 0,
             total_reviews: 0,
             relevance_score: 0
@@ -133,8 +132,71 @@ export async function GET(request: Request) {
       filteredResults = enhancedResults.filter(course => course.average_rating >= minRating)
     }
     
-    // Sort by relevance score (highest first)
-    const sortedResults = filteredResults.sort((a, b) => b.relevance_score - a.relevance_score)
+    // Apply sorting based on sort parameter
+    let sortedResults = [...filteredResults]
+    
+    switch (sortParam) {
+      case 'rating_desc':
+        sortedResults.sort((a, b) => {
+          if (a.average_rating === b.average_rating) {
+            return a.name.localeCompare(b.name)
+          }
+          return b.average_rating - a.average_rating
+        })
+        break
+        
+      case 'rating_asc':
+        sortedResults.sort((a, b) => {
+          if (a.average_rating === b.average_rating) {
+            return a.name.localeCompare(b.name)
+          }
+          return a.average_rating - b.average_rating
+        })
+        break
+        
+      case 'name_asc':
+        sortedResults.sort((a, b) => a.name.localeCompare(b.name))
+        break
+        
+      case 'name_desc':
+        sortedResults.sort((a, b) => b.name.localeCompare(a.name))
+        break
+        
+      case 'created_desc':
+        sortedResults.sort((a, b) => {
+          const aDate = new Date(a.created_at || 0)
+          const bDate = new Date(b.created_at || 0)
+          if (aDate.getTime() === bDate.getTime()) {
+            return a.name.localeCompare(b.name)
+          }
+          return bDate.getTime() - aDate.getTime()
+        })
+        break
+        
+      case 'review_count_desc':
+        sortedResults.sort((a, b) => {
+          if (a.total_reviews === b.total_reviews) {
+            return a.name.localeCompare(b.name)
+          }
+          return b.total_reviews - a.total_reviews
+        })
+        break
+        
+      default:
+        // For search queries, fall back to relevance score
+        if (hasSearchQuery) {
+          sortedResults.sort((a, b) => b.relevance_score - a.relevance_score)
+        } else {
+          // For filter-only queries, default to rating_desc
+          sortedResults.sort((a, b) => {
+            if (a.average_rating === b.average_rating) {
+              return a.name.localeCompare(b.name)
+            }
+            return b.average_rating - a.average_rating
+          })
+        }
+        break
+    }
     
     // Limit final results for search queries, but allow more for filter-only requests
     const finalLimit = query && query.trim().length > 0 ? 10 : 20
