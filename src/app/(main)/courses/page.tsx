@@ -8,6 +8,8 @@ import { StarRating } from "@/components/common/star-rating"
 import { MapPinIcon, SearchIcon } from "lucide-react"
 import { getAllCourses, getCourseReviews, getCourseAverageRating } from "@/lib/api/courses"
 import { useCourseSearch } from "@/hooks/use-course-search"
+import { useCourseFilters } from "@/hooks/use-course-filters"
+import { CourseFilters } from "@/components/courses/course-filters"
 import { useEffect, useState, useCallback } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
 
@@ -43,11 +45,16 @@ export default function CoursesPage() {
   const [allCourses, setAllCourses] = useState<CourseWithRating[]>([])
   const [isLoadingCourses, setIsLoadingCourses] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [availableProvinces, setAvailableProvinces] = useState<string[]>([])
+  const [isFiltersOpen, setIsFiltersOpen] = useState(false)
   
   // Get search term from URL parameters
   const urlSearchTerm = searchParams.get('search') || ''
   
-  // Use the course search hook
+  // Use the filter hooks
+  const { filters, updateFilters, clearFilters, hasActiveFilters } = useCourseFilters()
+  
+  // Use the course search hook with filter integration
   const {
     searchTerm,
     setSearchTerm,
@@ -57,18 +64,23 @@ export default function CoursesPage() {
     clearSearch,
     hasResults,
     isEmpty
-  } = useCourseSearch()
+  } = useCourseSearch(filters)
 
-  // Load all courses on mount
+  // Load all courses and available provinces on mount
   useEffect(() => {
-    const loadCourses = async () => {
+    const loadInitialData = async () => {
       try {
         setIsLoadingCourses(true)
-        const courses = await getAllCourses()
         
-        // Get ratings for each course
+        // Load courses and provinces in parallel
+        const [coursesData, provincesResponse] = await Promise.all([
+          getAllCourses(),
+          fetch('/api/courses/provinces')
+        ])
+        
+        // Process courses with ratings
         const enhancedCourses = await Promise.all(
-          courses.map(async (course) => {
+          coursesData.map(async (course) => {
             try {
               const reviews = await getCourseReviews(course.id)
               const avgRating = await getCourseAverageRating(course.id)
@@ -91,15 +103,22 @@ export default function CoursesPage() {
         )
         
         setAllCourses(enhancedCourses)
+        
+        // Process provinces
+        if (provincesResponse.ok) {
+          const provincesData = await provincesResponse.json()
+          setAvailableProvinces(provincesData)
+        }
+        
       } catch (err) {
-        console.error('Error loading courses:', err)
+        console.error('Error loading initial data:', err)
         setError('Failed to load courses. Please try again.')
       } finally {
         setIsLoadingCourses(false)
       }
     }
     
-    loadCourses()
+    loadInitialData()
   }, [])
 
   // Set search term from URL parameters
@@ -130,37 +149,74 @@ export default function CoursesPage() {
   // Memoize clear search handler to prevent unnecessary re-renders
   const handleClearSearch = useCallback(() => {
     clearSearch()
-    // Also clear URL parameter
+    clearFilters() // Also clear filters when clearing search
+    // Clear URL parameters
     const params = new URLSearchParams(searchParams)
     params.delete('search')
+    params.delete('province')
+    params.delete('minRating')
     const newUrl = `${window.location.pathname}${params.toString() ? `?${params.toString()}` : ''}`
     window.history.replaceState({}, '', newUrl)
-  }, [clearSearch, searchParams])
+  }, [clearSearch, clearFilters, searchParams])
 
-  // Determine which courses to display
-  const coursesToDisplay = hasResults ? 
-    // Convert search results to CourseWithRating format
-    results.map(result => {
-      const fullCourse = allCourses.find(course => course.id === result.id)
-      return fullCourse ? {
-        ...fullCourse,
-        rating: result.average_rating,
-        reviewCount: result.total_reviews
-      } : {
-        id: result.id,
-        name: result.name,
-        location: result.location,
-        province: result.province,
-        rating: result.average_rating,
-        reviewCount: result.total_reviews,
-        image: "/placeholder.svg?height=200&width=400",
-        created_at: new Date().toISOString()
-      } as CourseWithRating
-    }) : 
-    allCourses
+  // Filter all courses based on current filters when not searching
+  const getFilteredCourses = () => {
+    if (hasResults) {
+      // Convert search results to CourseWithRating format
+      return results.map(result => {
+        const fullCourse = allCourses.find(course => course.id === result.id)
+        return fullCourse ? {
+          ...fullCourse,
+          rating: result.average_rating,
+          reviewCount: result.total_reviews
+        } : {
+          id: result.id,
+          name: result.name,
+          location: result.location,
+          province: result.province,
+          rating: result.average_rating,
+          reviewCount: result.total_reviews,
+          image: "/placeholder.svg?height=200&width=400",
+          created_at: new Date().toISOString()
+        } as CourseWithRating
+      })
+    }
+    
+    // Apply filters to all courses when not searching
+    if (!searchTerm && hasActiveFilters) {
+      return allCourses.filter(course => {
+        const provinceMatch = !filters.province || course.province === filters.province
+        const ratingMatch = !filters.minRating || course.rating >= filters.minRating
+        return provinceMatch && ratingMatch
+      })
+    }
+    
+    return allCourses
+  }
 
-  const showNoResults = !isEmpty && !isSearching && !hasResults && searchTerm.length >= 2
+  const coursesToDisplay = getFilteredCourses()
+  const showNoResults = ((hasActiveFilters || !isEmpty) && !isSearching && coursesToDisplay.length === 0)
   const showLoading = isLoadingCourses || isSearching
+
+  // Generate results description
+  const getResultsDescription = () => {
+    if (hasResults) {
+      return `Found ${results.length} course${results.length === 1 ? '' : 's'} matching "${searchTerm}"`
+    }
+    
+    if (hasActiveFilters && !searchTerm) {
+      let description = `Showing ${coursesToDisplay.length} course${coursesToDisplay.length === 1 ? '' : 's'}`
+      if (filters.province) {
+        description += ` in ${filters.province}`
+      }
+      if (filters.minRating > 0) {
+        description += ` with ${filters.minRating}+ star${filters.minRating === 1 ? '' : 's'}`
+      }
+      return description
+    }
+    
+    return 'Discover and explore golf courses across South Africa'
+  }
 
   return (
     <div className="container py-8 md:py-12">
@@ -168,10 +224,7 @@ export default function CoursesPage() {
         <div>
           <h1 className="text-3xl font-bold mb-2">Golf Courses</h1>
           <p className="text-muted-foreground">
-            {hasResults ? 
-              `Found ${results.length} course${results.length === 1 ? '' : 's'} matching "${searchTerm}"` :
-              'Discover and explore golf courses across South Africa'
-            }
+            {getResultsDescription()}
           </p>
         </div>
         <div className="w-full md:w-auto flex gap-2">
@@ -184,7 +237,14 @@ export default function CoursesPage() {
               onChange={handleSearchChange}
             />
           </div>
-          <Button>Filter</Button>
+          <CourseFilters
+            isOpen={isFiltersOpen}
+            onToggle={() => setIsFiltersOpen(!isFiltersOpen)}
+            filters={filters}
+            onFiltersChange={updateFilters}
+            onClearFilters={clearFilters}
+            availableProvinces={availableProvinces}
+          />
         </div>
       </div>
 
@@ -211,13 +271,13 @@ export default function CoursesPage() {
       {showNoResults && (
         <div className="text-center py-8">
           <p className="text-muted-foreground mb-2">
-            No courses found for "{searchTerm}"
+            {searchTerm ? `No courses found for "${searchTerm}"` : 'No courses match the selected filters'}
           </p>
           <p className="text-sm text-muted-foreground">
-            Try searching for a course name, city, or province
+            {searchTerm ? 'Try searching for a course name, city, or province' : 'Try adjusting your filters or search criteria'}
           </p>
           <Button variant="outline" className="mt-4" onClick={handleClearSearch}>
-            Clear Search
+            {searchTerm ? 'Clear Search' : 'Clear Filters'}
           </Button>
         </div>
       )}
@@ -260,8 +320,8 @@ export default function CoursesPage() {
             ))}
           </div>
 
-          {/* Load More Button - Only show for all courses, not search results */}
-          {!hasResults && (
+          {/* Load More Button - Only show for unfiltered courses when no search/filters */}
+          {!hasResults && !hasActiveFilters && (
             <div className="flex justify-center mt-8">
               <Button variant="outline">Load More</Button>
             </div>

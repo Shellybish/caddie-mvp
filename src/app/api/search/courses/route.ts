@@ -5,17 +5,12 @@ export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url)
     const query = searchParams.get('q')
+    const province = searchParams.get('province')
+    const minRatingParam = searchParams.get('minRating')
+    const minRating = minRatingParam ? parseInt(minRatingParam) : 0
     
-    // Handle empty queries gracefully
-    if (!query || query.trim().length === 0) {
-      return NextResponse.json([])
-    }
-    
-    const searchTerm = query.trim().toLowerCase()
-    
-    // Search across course name, city, province, and description
-    // Using ILIKE for case-insensitive search with basic relevance scoring
-    const { data, error } = await supabase
+    // Start building the query
+    let queryBuilder = supabase
       .from('courses')
       .select(`
         id,
@@ -25,8 +20,22 @@ export async function GET(request: Request) {
         description,
         created_at
       `)
-      .or(`name.ilike.%${searchTerm}%,location.ilike.%${searchTerm}%,province.ilike.%${searchTerm}%,description.ilike.%${searchTerm}%`)
-      .limit(10)
+    
+    // Apply search filter if query exists
+    if (query && query.trim().length > 0) {
+      const searchTerm = query.trim().toLowerCase()
+      queryBuilder = queryBuilder.or(
+        `name.ilike.%${searchTerm}%,location.ilike.%${searchTerm}%,province.ilike.%${searchTerm}%,description.ilike.%${searchTerm}%`
+      )
+    }
+    
+    // Apply province filter
+    if (province && province.trim() !== '') {
+      queryBuilder = queryBuilder.eq('province', province)
+    }
+    
+    // Execute the query
+    const { data, error } = await queryBuilder.limit(50) // Increased limit for filtering
     
     if (error) {
       console.error('Search error:', error)
@@ -45,6 +54,7 @@ export async function GET(request: Request) {
             .from('course_reviews')
             .select('rating')
             .eq('course_id', course.id)
+            .gt('rating', 0) // Only include actual ratings (not 0 = played without rating)
           
           const ratings = ratingData || []
           const averageRating = ratings.length > 0 
@@ -53,26 +63,34 @@ export async function GET(request: Request) {
           
           // Calculate relevance score (exact matches first, then partial)
           let relevanceScore = 0
-          const lowerName = course.name.toLowerCase()
-          const lowerLocation = course.location?.toLowerCase() || ''
-          const lowerProvince = course.province?.toLowerCase() || ''
-          const lowerDescription = course.description?.toLowerCase() || ''
           
-          // Exact matches get highest score
-          if (lowerName === searchTerm) relevanceScore += 100
-          else if (lowerLocation === searchTerm) relevanceScore += 90
-          else if (lowerProvince === searchTerm) relevanceScore += 80
-          
-          // Starts with matches get medium-high score
-          if (lowerName.startsWith(searchTerm)) relevanceScore += 50
-          else if (lowerLocation.startsWith(searchTerm)) relevanceScore += 40
-          else if (lowerProvince.startsWith(searchTerm)) relevanceScore += 30
-          
-          // Contains matches get lower score
-          if (lowerName.includes(searchTerm)) relevanceScore += 20
-          if (lowerLocation.includes(searchTerm)) relevanceScore += 15
-          if (lowerProvince.includes(searchTerm)) relevanceScore += 10
-          if (lowerDescription.includes(searchTerm)) relevanceScore += 5
+          // Only calculate relevance if there's a search query
+          if (query && query.trim().length > 0) {
+            const searchTerm = query.trim().toLowerCase()
+            const lowerName = course.name.toLowerCase()
+            const lowerLocation = course.location?.toLowerCase() || ''
+            const lowerProvince = course.province?.toLowerCase() || ''
+            const lowerDescription = course.description?.toLowerCase() || ''
+            
+            // Exact matches get highest score
+            if (lowerName === searchTerm) relevanceScore += 100
+            else if (lowerLocation === searchTerm) relevanceScore += 90
+            else if (lowerProvince === searchTerm) relevanceScore += 80
+            
+            // Starts with matches get medium-high score
+            if (lowerName.startsWith(searchTerm)) relevanceScore += 50
+            else if (lowerLocation.startsWith(searchTerm)) relevanceScore += 40
+            else if (lowerProvince.startsWith(searchTerm)) relevanceScore += 30
+            
+            // Contains matches get lower score
+            if (lowerName.includes(searchTerm)) relevanceScore += 20
+            if (lowerLocation.includes(searchTerm)) relevanceScore += 15
+            if (lowerProvince.includes(searchTerm)) relevanceScore += 10
+            if (lowerDescription.includes(searchTerm)) relevanceScore += 5
+          } else {
+            // For non-search requests (filter only), use rating as relevance score
+            relevanceScore = averageRating * 20
+          }
           
           return {
             id: course.id,
@@ -98,10 +116,20 @@ export async function GET(request: Request) {
       })
     )
     
-    // Sort by relevance score (highest first)
-    const sortedResults = enhancedResults.sort((a, b) => b.relevance_score - a.relevance_score)
+    // Apply rating filter after calculating averages
+    let filteredResults = enhancedResults
+    if (minRating > 0) {
+      filteredResults = enhancedResults.filter(course => course.average_rating >= minRating)
+    }
     
-    return NextResponse.json(sortedResults)
+    // Sort by relevance score (highest first)
+    const sortedResults = filteredResults.sort((a, b) => b.relevance_score - a.relevance_score)
+    
+    // Limit final results for search queries, but allow more for filter-only requests
+    const finalLimit = query && query.trim().length > 0 ? 10 : 20
+    const finalResults = sortedResults.slice(0, finalLimit)
+    
+    return NextResponse.json(finalResults)
     
   } catch (error) {
     console.error('Search API error:', error)

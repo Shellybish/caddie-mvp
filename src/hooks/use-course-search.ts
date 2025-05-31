@@ -11,7 +11,12 @@ export type SearchResult = {
   relevance_score: number
 }
 
-export function useCourseSearch() {
+interface SearchOptions {
+  province?: string
+  minRating?: number
+}
+
+export function useCourseSearch(options?: SearchOptions) {
   const [searchTerm, setSearchTerm] = useState('')
   const [results, setResults] = useState<SearchResult[]>([])
   const [isLoading, setIsLoading] = useState(false)
@@ -22,15 +27,11 @@ export function useCourseSearch() {
   
   useEffect(() => {
     const performSearch = async () => {
-      // Clear results and error for empty searches
-      if (!debouncedSearchTerm || debouncedSearchTerm.trim().length === 0) {
-        setResults([])
-        setError(null)
-        return
-      }
+      const hasSearchTerm = debouncedSearchTerm && debouncedSearchTerm.trim().length >= 2
+      const hasFilters = options && (options.province || (options.minRating && options.minRating > 0))
       
-      // Don't search for very short terms
-      if (debouncedSearchTerm.trim().length < 2) {
+      // Clear results if no search term and no filters
+      if (!hasSearchTerm && !hasFilters) {
         setResults([])
         setError(null)
         return
@@ -40,7 +41,22 @@ export function useCourseSearch() {
       setError(null)
       
       try {
-        const response = await fetch(`/api/search/courses?q=${encodeURIComponent(debouncedSearchTerm)}`)
+        // Build query parameters
+        const params = new URLSearchParams()
+        
+        if (hasSearchTerm) {
+          params.set('q', debouncedSearchTerm.trim())
+        }
+        
+        if (options?.province) {
+          params.set('province', options.province)
+        }
+        
+        if (options?.minRating && options.minRating > 0) {
+          params.set('minRating', options.minRating.toString())
+        }
+        
+        const response = await fetch(`/api/search/courses?${params.toString()}`)
         
         if (!response.ok) {
           throw new Error('Search failed')
@@ -58,7 +74,7 @@ export function useCourseSearch() {
     }
     
     performSearch()
-  }, [debouncedSearchTerm])
+  }, [debouncedSearchTerm, options?.province, options?.minRating])
   
   // Memoize clearSearch to prevent infinite re-renders in components that depend on it
   const clearSearch = useCallback(() => {
