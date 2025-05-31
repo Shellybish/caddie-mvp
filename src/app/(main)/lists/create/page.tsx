@@ -1,7 +1,6 @@
 "use client"
 
-import type React from "react"
-
+import type { ChangeEvent, FormEvent } from "react"
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
@@ -86,7 +85,7 @@ export default function CreateListPage() {
     setFilteredCourses(filtered)
   }, [searchQuery, allCourses])
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+  const handleInputChange = (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { id, value } = e.target
     setFormData((prev) => ({ ...prev, [id]: value }))
   }
@@ -109,7 +108,7 @@ export default function CreateListPage() {
     return selectedCourses.some(course => course.id === courseId)
   }
 
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     setIsSubmitting(true)
 

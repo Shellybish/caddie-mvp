@@ -1,6 +1,6 @@
 "use client"
 
-import type React from "react"
+import type { FormEvent } from "react"
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
@@ -46,7 +46,7 @@ export default function ReviewPage({ params }: { params: { id: string } }) {
     fetchCourseData()
   }, [courseId])
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
     
     if (!rating) {

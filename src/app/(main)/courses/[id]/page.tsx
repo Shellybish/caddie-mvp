@@ -8,11 +8,9 @@ import {
   BookmarkIcon, 
   CalendarIcon, 
   GlobeIcon, 
-  HeartIcon, 
   ListIcon, 
   MapPinIcon, 
   PhoneIcon, 
-  Share2Icon, 
   ThumbsUpIcon 
 } from "lucide-react"
 import { getCourseById, type Course } from "@/lib/api/courses"
