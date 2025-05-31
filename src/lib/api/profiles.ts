@@ -44,8 +44,6 @@ export async function upsertProfile(userId: string, data: Partial<Profile>) {
       // Don't include other fields that might cause issues
     };
 
-    console.log('Attempting to insert minimal profile with data:', JSON.stringify(profileData, null, 2));
-
     // Try a basic insert instead of upsert first to see if that works
     const { data: profile, error } = await supabase
       .from('profiles')

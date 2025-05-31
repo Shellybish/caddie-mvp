@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { ClubIcon as GolfIcon } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
-import { sendResetPasswordEmail } from "@/lib/api/auth"
+import { sendPasswordResetEmail } from "@/lib/api/auth"
 
 export default function ForgotPasswordPage() {
   const [isLoading, setIsLoading] = useState(false)
@@ -20,7 +20,7 @@ export default function ForgotPasswordPage() {
     setIsLoading(true)
 
     try {
-      await sendResetPasswordEmail(email)
+      await sendPasswordResetEmail(email)
       
       setIsSubmitted(true)
       toast({

@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useState, useEffect, type ReactNode } from "react"
 import { supabase } from "@/lib/supabase/client"
-import { signIn, signUp, signOut, getSession, getCurrentUser } from "@/lib/api/auth"
+import { signIn, signUp, signOut, getSession, getUser } from "@/lib/api/auth"
 import { upsertProfile, getProfileById } from "@/lib/api/profiles"
 
 type User = {
@@ -31,7 +31,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const checkSession = async () => {
       try {
-        const currentUser = await getCurrentUser();
+        const currentUser = await getUser();
         
         if (currentUser) {
           // Get profile data
@@ -144,22 +144,23 @@ export function UserProvider({ children }: { children: ReactNode }) {
     setIsLoading(true);
     
     try {
-      // Pass the user metadata to be used by our trigger
-      const { user: authUser } = await signUp(email, password, {
-        data: {
-          name: name,
-          username: name,
-          full_name: name,
-          location: location
-        }
-      });
+      const { user: authUser } = await signUp(email, password);
       
       if (!authUser) {
         throw new Error("Registration failed");
       }
       
-      // The database trigger will create the profile automatically
-      // so we don't need to manually call upsertProfile here
+      // Create the profile manually since we removed the metadata
+      try {
+        await upsertProfile(authUser.id, {
+          username: name,
+          full_name: name,
+          location: location
+        });
+      } catch (error) {
+        console.error("Error creating profile:", error);
+        // Continue even if profile creation fails
+      }
       
       setUser({
         id: authUser.id,

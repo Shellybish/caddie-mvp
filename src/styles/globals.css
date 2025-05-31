@@ -92,3 +92,32 @@ body {
     @apply bg-background text-foreground;
   }
 }
+
+/* Star Rating Component Styles */
+@layer components {
+  .star-rating {
+    @apply flex items-center gap-1;
+  }
+  
+  .star-rating svg {
+    @apply transition-all duration-200 ease-in-out;
+    color: #e5e7eb; /* gray-200 for better contrast */
+  }
+  
+  .star-rating svg.filled {
+    color: hsl(var(--foreground)); /* black color to match course cards */
+  }
+  
+  .star-rating.cursor-pointer svg:hover {
+    @apply scale-110;
+    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
+  }
+  
+  .star-rating.large svg {
+    @apply w-9 h-9;
+  }
+  
+  .star-rating.cursor-pointer svg {
+    @apply hover:brightness-110 transition-all duration-150;
+  }
+}

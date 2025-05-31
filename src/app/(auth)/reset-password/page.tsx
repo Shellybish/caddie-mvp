@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, Suspense } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
@@ -9,9 +9,9 @@ import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { ClubIcon as GolfIcon } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
-import { updatePasswordWithToken } from "@/lib/api/auth"
+import { updatePassword } from "@/lib/api/auth"
 
-export default function ResetPasswordPage() {
+function ResetPasswordForm() {
   const [isLoading, setIsLoading] = useState(false)
   const [password, setPassword] = useState("")
   const [confirmPassword, setConfirmPassword] = useState("")
@@ -50,7 +50,7 @@ export default function ResetPasswordPage() {
     setIsLoading(true)
 
     try {
-      await updatePasswordWithToken(password)
+      await updatePassword(password)
       
       setIsResetComplete(true)
       toast({
@@ -71,6 +71,71 @@ export default function ResetPasswordPage() {
   }
 
   return (
+    <>
+      {error && (
+        <Alert variant="destructive">
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
+
+      {isResetComplete ? (
+        <div className="rounded-lg border bg-card text-card-foreground p-6 shadow-sm">
+          <h3 className="text-xl font-semibold mb-2">Password reset complete</h3>
+          <p className="text-sm text-muted-foreground mb-4">
+            Your password has been reset successfully. You can now log in with your new password.
+          </p>
+          <Button asChild className="w-full">
+            <Link href="/login">Go to Login</Link>
+          </Button>
+        </div>
+      ) : (
+        <div className="grid gap-6">
+          <form onSubmit={handleSubmit}>
+            <div className="grid gap-4">
+              <div className="grid gap-2">
+                <Label htmlFor="password">New Password</Label>
+                <Input
+                  id="password"
+                  type="password"
+                  autoCapitalize="none"
+                  autoComplete="new-password"
+                  disabled={isLoading}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="confirmPassword">Confirm Password</Label>
+                <Input
+                  id="confirmPassword"
+                  type="password"
+                  autoCapitalize="none"
+                  autoComplete="new-password"
+                  disabled={isLoading}
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  required
+                />
+              </div>
+              <Button type="submit" disabled={isLoading}>
+                {isLoading ? "Resetting..." : "Reset Password"}
+              </Button>
+            </div>
+          </form>
+          <p className="px-8 text-center text-sm text-muted-foreground">
+            <Link href="/login" className="hover:text-brand underline underline-offset-4">
+              Back to login
+            </Link>
+          </p>
+        </div>
+      )}
+    </>
+  )
+}
+
+export default function ResetPasswordPage() {
+  return (
     <div className="container flex h-screen w-screen flex-col items-center justify-center">
       <div className="mx-auto flex w-full flex-col justify-center space-y-6 sm:w-[350px]">
         <div className="flex flex-col space-y-2 text-center">
@@ -83,64 +148,9 @@ export default function ResetPasswordPage() {
           </p>
         </div>
 
-        {error && (
-          <Alert variant="destructive">
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
-        )}
-
-        {isResetComplete ? (
-          <div className="rounded-lg border bg-card text-card-foreground p-6 shadow-sm">
-            <h3 className="text-xl font-semibold mb-2">Password reset complete</h3>
-            <p className="text-sm text-muted-foreground mb-4">
-              Your password has been reset successfully. You can now log in with your new password.
-            </p>
-            <Button asChild className="w-full">
-              <Link href="/login">Go to Login</Link>
-            </Button>
-          </div>
-        ) : (
-          <div className="grid gap-6">
-            <form onSubmit={handleSubmit}>
-              <div className="grid gap-4">
-                <div className="grid gap-2">
-                  <Label htmlFor="password">New Password</Label>
-                  <Input
-                    id="password"
-                    type="password"
-                    autoCapitalize="none"
-                    autoComplete="new-password"
-                    disabled={isLoading}
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="confirmPassword">Confirm Password</Label>
-                  <Input
-                    id="confirmPassword"
-                    type="password"
-                    autoCapitalize="none"
-                    autoComplete="new-password"
-                    disabled={isLoading}
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    required
-                  />
-                </div>
-                <Button type="submit" disabled={isLoading}>
-                  {isLoading ? "Resetting..." : "Reset Password"}
-                </Button>
-              </div>
-            </form>
-            <p className="px-8 text-center text-sm text-muted-foreground">
-              <Link href="/login" className="hover:text-brand underline underline-offset-4">
-                Back to login
-              </Link>
-            </p>
-          </div>
-        )}
+        <Suspense fallback={<div>Loading...</div>}>
+          <ResetPasswordForm />
+        </Suspense>
       </div>
     </div>
   )

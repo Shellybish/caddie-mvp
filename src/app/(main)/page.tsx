@@ -45,7 +45,6 @@ export default async function HomePage() {
     
     // If we have no real data at all, use fallback data
     if (highestRatedData.length === 0 && trendingData.length === 0 && hiddenGemData.length === 0) {
-      console.warn("No course data available from API, using fallback data");
       // Fallback to mock data if all APIs fail
       highestRatedData = [{
         id: '1',

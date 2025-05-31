@@ -29,6 +29,7 @@ import { LikeButton } from "@/components/reviews/LikeButton"
 import { cookies } from "next/headers"
 import { getUserIdFromCookies } from "@/lib/auth/session"
 import { FavoriteCourseButton } from "@/components/courses/favorite-course-button"
+import { CourseActions, CourseActionsButtons } from "@/components/courses/course-actions"
 
 // Define an enhanced course type with UI-specific properties
 type EnhancedCourse = Course & {
@@ -67,16 +68,15 @@ const REVIEWS_PER_PAGE = 5;
 export default async function CourseDetailPage({ params, searchParams }: CourseDetailPageProps) {
   // Fix for Next.js warning about using params synchronously
   const resolvedParams = await Promise.resolve(params);
+  const resolvedSearchParams = await Promise.resolve(searchParams);
   const id = resolvedParams.id;
   
   // Get current page from query params
-  const page = searchParams?.page ? parseInt(searchParams.page) : 1;
+  const page = resolvedSearchParams?.page ? parseInt(resolvedSearchParams.page) : 1;
   
   // Get user ID from cookies for checking if user liked reviews
   const cookieStore = cookies();
   const userId = await getUserIdFromCookies(cookieStore);
-  
-  console.log("Course ID from params:", id, typeof id);
   
   // Try to fetch the course from the database
   let course: EnhancedCourse;
@@ -84,9 +84,7 @@ export default async function CourseDetailPage({ params, searchParams }: CourseD
   let reviewCount = 0;
   
   try {
-    console.log("Attempting to fetch course with ID:", id);
     const dbCourse = await getCourseById(id);
-    console.log("Successfully fetched course:", dbCourse?.name || "Unknown");
     
     // Get the review data
     const rawReviews = await getCourseReviews(id);
@@ -94,7 +92,6 @@ export default async function CourseDetailPage({ params, searchParams }: CourseD
     
     // Set the review count from the actual reviews fetched
     reviewCount = rawReviews?.length || 0;
-    console.log(`Found ${reviewCount} reviews for this course`);
     
     // Calculate pagination
     const startIndex = (page - 1) * REVIEWS_PER_PAGE;
@@ -519,38 +516,9 @@ export default async function CourseDetailPage({ params, searchParams }: CourseD
 
           {/* Sidebar */}
           <div className="w-full lg:w-[300px] space-y-6">
-            <Card>
-              <CardContent className="p-4 space-y-4">
-                <div className="flex justify-between items-center">
-                  <h3 className="font-medium">Actions</h3>
-                </div>
-                <div className="grid gap-2">
-                  <Button asChild className="w-full">
-                    <Link href={`/courses/${course.id}/log`}>
-                      <CalendarIcon className="h-4 w-4 mr-2" />
-                      Log Play
-                    </Link>
-                  </Button>
-                  <Button asChild variant="outline" className="w-full">
-                    <Link href={`/courses/${course.id}/review`}>
-                      <ThumbsUpIcon className="h-4 w-4 mr-2" />
-                      Write Review
-                    </Link>
-                  </Button>
-                  <FavoriteCourseButton courseId={course.id} />
-                  <Button asChild variant="outline" className="w-full">
-                    <Link href={`/courses/${course.id}/add-to-list`}>
-                      <ListIcon className="h-4 w-4 mr-2" />
-                      Add to List
-                    </Link>
-                  </Button>
-                  <Button variant="ghost" className="w-full">
-                    <Share2Icon className="h-4 w-4 mr-2" />
-                    Share
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
+            <CourseActions courseId={course.id} courseName={course.name} />
+            
+            <CourseActionsButtons courseId={course.id} />
 
             <Card>
               <CardContent className="p-4 space-y-4">

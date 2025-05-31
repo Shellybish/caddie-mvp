@@ -8,39 +8,47 @@ import { cn } from "@/lib/utils"
 import { Toaster } from "@/components/ui/sonner"
 import { checkSupabaseConnection, checkSupabaseSchema } from "@/lib/supabase/client"
 
+const inter = Inter({ subsets: ["latin"] })
+
 // Verify Supabase connection on app initialization (in development)
-if (process.env.NODE_ENV === "development") {
+async function verifySupabaseSetup() {
   // Check connection
-  checkSupabaseConnection().then(result => {
-    if (result.connected) {
-      console.log("✅ Connected to Supabase database successfully");
-      // If connected, also check schema
-      checkSupabaseSchema().then(schemaResult => {
-        if (schemaResult.success) {
-          console.log("✅ Database schema verified");
-          console.log("Available tables:", schemaResult.tables);
-        } else {
-          console.error("❌ Database schema issue:", schemaResult.error);
-          console.log("Available tables:", schemaResult.tables);
-          console.warn("You may need to create the profiles table:");
-          console.warn(`
-CREATE TABLE profiles (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  user_id UUID REFERENCES auth.users(id) NOT NULL,
-  username TEXT NOT NULL,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
-);
-          `);
-        }
-      });
+  const result = await checkSupabaseConnection()
+  
+  if (result.connected) {
+    // If connected, also check schema
+    const schemaResult = await checkSupabaseSchema()
+    
+    if (schemaResult.success) {
+      // Schema is good
     } else {
-      console.error("❌ Failed to connect to Supabase:", result.error);
-      console.warn("Please check your Supabase setup including:");
-      console.warn("- Environment variables in .env.local");
-      console.warn("- Supabase project configuration");
-      console.warn("- Database tables and schemas");
+      console.error("❌ Database schema issue:", schemaResult.error)
+      console.warn("You may need to create the profiles table:")
+      console.warn(`
+        CREATE TABLE profiles (
+          id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+          user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+          username TEXT UNIQUE,
+          full_name TEXT,
+          location TEXT,
+          bio TEXT,
+          avatar_url TEXT,
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+        );
+      `)
     }
-  });
+  } else {
+    console.error("❌ Failed to connect to Supabase:", result.error)
+    console.warn("Please check your Supabase setup including:")
+    console.warn("- Environment variables in .env.local")
+    console.warn("- Supabase project configuration")
+    console.warn("- Database tables and schemas")
+  }
+}
+
+// Only run verification in development
+if (process.env.NODE_ENV === 'development') {
+  verifySupabaseSetup()
 }
 
 const fontSans = Inter({
@@ -55,9 +63,8 @@ const fontSerif = Inter({
 })
 
 export const metadata: Metadata = {
-  title: "Caddie - Discover, Rate & Review Golf Courses",
-  description: "The social platform for golf enthusiasts to discover, rate, review, and share golf courses.",
-  generator: 'v0.dev'
+  title: "Caddie - Golf Course Reviews & Social Platform",
+  description: "Discover, review, and share your favorite golf courses with the Caddie community.",
 }
 
 export default function RootLayout({

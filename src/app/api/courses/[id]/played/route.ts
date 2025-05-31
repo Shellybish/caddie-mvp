@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { logPlayAndReview } from '@/lib/api/courses'
+import { markCourseAsPlayed } from '@/lib/api/courses'
 import { cookies } from 'next/headers'
 import { getUserIdFromCookies } from '@/lib/auth/session'
 
@@ -11,7 +11,7 @@ export async function POST(
     // Fix for Next.js warning about using params synchronously
     const resolvedParams = await Promise.resolve(params)
     const courseId = resolvedParams.id
-    const { date, rating, notes } = await request.json()
+    const { datePlayed } = await request.json()
     
     // Get user ID from cookies
     const cookieStore = cookies()
@@ -25,25 +25,23 @@ export async function POST(
       )
     }
     
-    // Log the play with minimal review data
-    const result = await logPlayAndReview(
-      courseId,
+    // Mark the course as played
+    const result = await markCourseAsPlayed(
       userId,
-      rating || 0,
-      notes,
-      date ? new Date(date).toISOString().split('T')[0] : undefined
+      courseId,
+      datePlayed ? new Date(datePlayed).toISOString().split('T')[0] : undefined
     )
     
     return NextResponse.json({
       success: true,
-      message: "Round logged successfully",
+      message: "Course marked as played successfully",
       data: result
     })
   } catch (error) {
-    console.error("Error logging round:", error)
+    console.error("Error marking course as played:", error)
     
     return NextResponse.json(
-      { error: "Failed to log round" },
+      { error: "Failed to mark course as played" },
       { status: 500 }
     )
   }

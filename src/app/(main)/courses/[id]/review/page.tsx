@@ -11,7 +11,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { StarRating } from "@/components/common/star-rating"
 import { ChevronLeftIcon } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
-import { fetchCourseById, submitReview } from "@/lib/api/client"
+import { fetchCourse, submitReview } from "@/lib/api/client"
 
 export default function ReviewPage({ params }: { params: { id: string } }) {
   const courseId = params.id
@@ -19,75 +19,55 @@ export default function ReviewPage({ params }: { params: { id: string } }) {
   const [rating, setRating] = useState(0)
   const [reviewText, setReviewText] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [course, setCourse] = useState({ id: "", name: "Loading...", location: "" })
+  const [course, setCourse] = useState({ id: "", name: "Loading...", location: "", province: "", created_at: "" })
   const [isLoading, setIsLoading] = useState(true)
   const { toast } = useToast()
+  const [error, setError] = useState("")
 
   // Fetch the actual course data
   useEffect(() => {
-    const fetchCourse = async () => {
+    const fetchCourseData = async () => {
       try {
-        console.log(`Fetching course data for ID: ${courseId}`)
-        setIsLoading(true)
-        const courseData = await fetchCourseById(courseId)
-        console.log("Received course data:", courseData)
-        setCourse({
-          id: courseData.id,
-          name: courseData.name,
-          location: courseData.location
-        })
+        const courseData = await fetchCourse(courseId)
+        setCourse(courseData)
       } catch (error) {
         console.error("Error fetching course:", error)
-        toast({
-          variant: "destructive",
-          title: "Error",
-          description: "Failed to load course information."
+        // Set fallback course data
+        setCourse({
+          id: courseId,
+          name: "Course Not Found",
+          location: "Unknown Location",
+          province: "Unknown Province",
+          created_at: new Date().toISOString()
         })
-      } finally {
-        setIsLoading(false)
       }
     }
-    
-    fetchCourse()
-  }, [courseId, toast])
 
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    fetchCourseData()
+  }, [courseId])
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     
-    if (rating === 0) {
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: "Please provide a rating."
-      })
+    if (!rating) {
+      setError("Please select a rating")
       return
     }
-    
+
     setIsSubmitting(true)
-    
+    setError("")
+
     try {
-      console.log(`Submitting review for course ID: ${courseId}`)
       const result = await submitReview(courseId, {
-        rating: rating,
+        rating,
         review_text: reviewText
       })
-      
-      console.log("Review submission result:", result)
-      
-      toast({
-        title: "Review submitted successfully",
-        description: `Your review for ${course.name} has been posted.`,
-      })
-      
-      // Redirect back to course page
+
+      // Redirect to course page on success
       router.push(`/courses/${courseId}`)
     } catch (error) {
       console.error("Error submitting review:", error)
-      toast({
-        variant: "destructive", 
-        title: "Error",
-        description: "Failed to submit your review. Please try again."
-      })
+      setError("Failed to submit review. Please try again.")
     } finally {
       setIsSubmitting(false)
     }

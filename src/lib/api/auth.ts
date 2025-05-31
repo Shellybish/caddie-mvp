@@ -1,49 +1,39 @@
-import { supabase } from '../supabase/client';
+import { supabase } from '@/lib/supabase/client'
 
 // Sign up a new user
-export async function signUp(email: string, password: string, options?: { data?: Record<string, any> }) {
+export async function signUp(email: string, password: string) {
   try {
     // Add validation for email and password
-    if (!email) throw new Error('Email is required');
-    if (!password) throw new Error('Password is required');
-    if (password.length < 6) throw new Error('Password must be at least 6 characters');
-    
-    console.log(`Attempting to sign up user with email: ${email}`);
-    
+    if (!email || !password) {
+      throw new Error('Email and password are required')
+    }
+
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
-      options: {
-        data: options?.data
-      }
-    });
-    
+    })
+
     if (error) {
-      console.error('Supabase auth sign up error:', error);
-      
       // Provide friendly error messages for common issues
-      if (error.message?.includes('email')) {
-        throw new Error('Invalid email address. Please check and try again.');
+      switch (error.message) {
+        case 'User already registered':
+          throw new Error('An account with this email already exists. Please try signing in instead.')
+        case 'Invalid email address':
+          throw new Error('Please enter a valid email address.')
+        case 'Password should be at least 6 characters':
+          throw new Error('Password must be at least 6 characters long.')
+        default:
+          throw error
       }
-      
-      if (error.message?.includes('password')) {
-        throw new Error('Password is too weak. Please use a stronger password.');
-      }
-      
-      if (error.message?.includes('already')) {
-        throw new Error('An account with this email already exists. Please try signing in instead.');
-      }
-      
-      // For any other errors, throw the original error
-      throw error;
     }
-    
+
     // Check if email confirmation is required
-    if (data?.user?.identities?.length === 0) {
-      throw new Error('This email address is already registered. Please check your email for the confirmation link.');
+    if (data.user && !data.session) {
+      // Email confirmation required
+      return { user: data.user, session: null, emailConfirmationRequired: true }
     }
-    
-    return data;
+
+    return { user: data.user, session: data.session }
   } catch (error) {
     console.error('Error during sign up:', error);
     throw error;
@@ -53,43 +43,31 @@ export async function signUp(email: string, password: string, options?: { data?:
 // Sign in an existing user
 export async function signIn(email: string, password: string) {
   try {
-    console.log(`Attempting to sign in user with email: ${email}`);
-    
     // Validate inputs
-    if (!email) throw new Error('Email is required');
-    if (!password) throw new Error('Password is required');
-    
+    if (!email || !password) {
+      throw new Error('Email and password are required')
+    }
+
     const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
-    });
-    
+    })
+
     if (error) {
-      console.error('Supabase auth sign in error:', error);
-      
       // Provide friendly error messages for common issues
-      if (error.message?.includes('email')) {
-        throw new Error('Invalid email address. Please check and try again.');
+      switch (error.message) {
+        case 'Invalid login credentials':
+          throw new Error('Invalid email or password. Please check your credentials and try again.')
+        case 'Email not confirmed':
+          throw new Error('Please check your email and click the confirmation link before signing in.')
+        case 'Too many requests':
+          throw new Error('Too many failed login attempts. Please wait a moment and try again.')
+        default:
+          throw error
       }
-      
-      if (error.message?.includes('password')) {
-        throw new Error('Incorrect password. Please try again.');
-      }
-      
-      if (error.message?.includes('Invalid login credentials')) {
-        throw new Error('Invalid email or password. Please check your credentials and try again.');
-      }
-      
-      // For any other errors, throw the original error
-      throw error;
     }
-    
-    if (!data.user) {
-      throw new Error('Login failed: No user returned from authentication service.');
-    }
-    
-    console.log('User signed in successfully');
-    return data;
+
+    return { user: data.user, session: data.session }
   } catch (error) {
     console.error('Error during sign in:', error);
     throw error;
@@ -98,43 +76,38 @@ export async function signIn(email: string, password: string) {
 
 // Sign out the current user
 export async function signOut() {
-  const { error } = await supabase.auth.signOut();
-  if (error) throw error;
+  const { error } = await supabase.auth.signOut()
+  if (error) throw error
 }
 
 // Get the current session
 export async function getSession() {
-  const { data, error } = await supabase.auth.getSession();
-  if (error) throw error;
-  return data;
+  const { data: { session } } = await supabase.auth.getSession()
+  return session
 }
 
 // Get the current user
-export async function getCurrentUser() {
-  const { data: { session } } = await supabase.auth.getSession();
-  return session?.user || null;
+export async function getUser() {
+  const { data: { user } } = await supabase.auth.getUser()
+  return user
 }
 
 // Send a password reset email
-export async function sendResetPasswordEmail(email: string) {
+export async function sendPasswordResetEmail(email: string) {
   try {
-    if (!email) throw new Error('Email is required');
-    
-    console.log(`Sending password reset email to: ${email}`);
-    
     // Get the origin URL safely (works in browser only)
-    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    const origin = typeof window !== 'undefined' ? window.location.origin : undefined
     
-    const { data, error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${origin}/reset-password`,
-    });
-    
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: origin ? `${origin}/reset-password` : undefined,
+    })
+
     if (error) {
       console.error('Password reset email error:', error);
-      throw error;
+      throw new Error('Failed to send password reset email. Please try again.')
     }
-    
-    return data;
+
+    return { success: true }
   } catch (error) {
     console.error('Error sending password reset email:', error);
     throw error;
@@ -142,23 +115,18 @@ export async function sendResetPasswordEmail(email: string) {
 }
 
 // Update user password using a recovery token
-export async function updatePasswordWithToken(newPassword: string) {
+export async function updatePassword(newPassword: string) {
   try {
-    if (!newPassword) throw new Error('New password is required');
-    if (newPassword.length < 6) throw new Error('Password must be at least 6 characters');
-    
-    console.log('Attempting to update password');
-    
-    const { data, error } = await supabase.auth.updateUser({
+    const { error } = await supabase.auth.updateUser({
       password: newPassword
-    });
-    
+    })
+
     if (error) {
       console.error('Password update error:', error);
-      throw error;
+      throw new Error('Failed to update password. Please try again.')
     }
-    
-    return data;
+
+    return { success: true }
   } catch (error) {
     console.error('Error updating password:', error);
     throw error;

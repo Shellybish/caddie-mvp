@@ -16,7 +16,7 @@ import { format } from "date-fns"
 import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { cn } from "@/lib/utils"
-import { fetchCourseById, logRound } from "@/lib/api/client"
+import { fetchCourse, logRound } from "@/lib/api/client"
 
 export default function LogPlayPage({ params }: { params: { id: string } }) {
   const courseId = params.id
@@ -25,76 +25,56 @@ export default function LogPlayPage({ params }: { params: { id: string } }) {
   const [rating, setRating] = useState(0)
   const [notes, setNotes] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [course, setCourse] = useState({ id: "", name: "Loading...", location: "" })
+  const [course, setCourse] = useState({ id: "", name: "Loading...", location: "", province: "", created_at: "" })
   const [isLoading, setIsLoading] = useState(true)
   const { toast } = useToast()
+  const [error, setError] = useState("")
   
   // Fetch the actual course data
   useEffect(() => {
-    const fetchCourse = async () => {
+    const fetchCourseData = async () => {
       try {
-        console.log(`Fetching course data for ID: ${courseId}`)
-        setIsLoading(true)
-        const courseData = await fetchCourseById(courseId)
-        console.log("Received course data:", courseData)
-        setCourse({
-          id: courseData.id,
-          name: courseData.name,
-          location: courseData.location
-        })
+        const courseData = await fetchCourse(courseId)
+        setCourse(courseData)
       } catch (error) {
         console.error("Error fetching course:", error)
-        toast({
-          variant: "destructive",
-          title: "Error",
-          description: "Failed to load course information."
+        // Set fallback course data
+        setCourse({
+          id: courseId,
+          name: "Course Not Found",
+          location: "Unknown Location",
+          province: "Unknown Province",
+          created_at: new Date().toISOString()
         })
-      } finally {
-        setIsLoading(false)
       }
     }
-    
-    fetchCourse()
-  }, [courseId, toast])
 
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    fetchCourseData()
+  }, [courseId])
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     
     if (!date) {
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: "Please select a date."
-      })
+      setError("Please select a date")
       return
     }
-    
+
     setIsSubmitting(true)
-    
+    setError("")
+
     try {
-      console.log(`Logging round for course ID: ${courseId}`)
       const result = await logRound(courseId, {
-        date: date,
-        rating: rating,
-        notes: notes
+        date: date.toISOString().split('T')[0], // Convert Date to string format
+        rating: rating || 0,
+        notes
       })
-      
-      console.log("Log round result:", result)
-      
-      toast({
-        title: "Round logged successfully",
-        description: `You've logged a round at ${course.name}.`,
-      })
-      
-      // Redirect back to course page
+
+      // Redirect to course page on success
       router.push(`/courses/${courseId}`)
     } catch (error) {
       console.error("Error logging round:", error)
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: "Failed to log your round. Please try again."
-      })
+      setError("Failed to log round. Please try again.")
     } finally {
       setIsSubmitting(false)
     }

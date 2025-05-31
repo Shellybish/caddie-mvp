@@ -153,24 +153,15 @@ export default function ProfilePage() {
     const fetchUserData = async () => {
       if (!user?.id) return
       
-      console.time('TOTAL_PROFILE_LOAD_TIME')
       try {
         setIsLoading(true)
-        console.log(`Fetching data for user ${user.id}`)
         
         // Get user stats first 
-        console.time('getUserStats')
         const userStats = await getUserStats(user.id)
-        console.timeEnd('getUserStats')
-        console.log("User stats:", userStats)
         setStats(userStats)
         
         // Get user reviews
-        console.log("Fetching user reviews...")
-        console.time('getUserReviews')
         const reviews = await getUserReviews(user.id)
-        console.timeEnd('getUserReviews')
-        console.log(`Received ${reviews.length} reviews from API`)
         
         if (reviews && Array.isArray(reviews)) {
           setUserReviews(reviews)
@@ -181,7 +172,6 @@ export default function ProfilePage() {
           ).slice(0, 3)
           
           setRecentPlays(recentOnes)
-          console.log(`Set ${recentOnes.length} recent plays`)
           
           // Calculate rating distribution
           const distribution = [0, 0, 0, 0, 0]
@@ -198,30 +188,18 @@ export default function ProfilePage() {
         }
 
         // Get favorite courses
-        console.log("Fetching favorite courses...")
-        console.time('getFavoriteCourses')
         const favorites = await getFavoriteCourses(user.id)
-        console.timeEnd('getFavoriteCourses')
-        console.log(`Received ${favorites.length} favorite courses`)
         setFavoriteCourses(favorites)
 
         // Get bucket list courses
-        console.log("Fetching bucket list courses...")
-        console.time('getBucketListCourses')
         const bucketList = await getBucketListCourses(user.id)
-        console.timeEnd('getBucketListCourses')
-        console.log(`Received ${bucketList.length} bucket list courses`)
         setBucketListCourses(bucketList)
         
         // Get user lists
-        console.log("Fetching user lists...")
         try {
-          console.time('getListsByUserId')
           const lists = await getListsByUserId(user.id, true);
-          console.timeEnd('getListsByUserId')
           
           // Fetch courses for each list
-          console.time('fetchListDetails')
           const listsWithCourses = await Promise.all(
             lists.map(async (list) => {
               try {
@@ -247,8 +225,6 @@ export default function ProfilePage() {
               }
             })
           );
-          console.timeEnd('fetchListDetails')
-          console.log(`Received ${listsWithCourses.length} user lists`)
           setUserLists(listsWithCourses);
         } catch (error) {
           console.error("Error fetching user lists:", error);
@@ -263,7 +239,6 @@ export default function ProfilePage() {
         setUserLists([])
       } finally {
         setIsLoading(false)
-        console.timeEnd('TOTAL_PROFILE_LOAD_TIME')
       }
     }
     

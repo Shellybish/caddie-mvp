@@ -15,12 +15,14 @@ export async function POST(
     
     // Get user ID from cookies
     const cookieStore = cookies()
-    let userId = await getUserIdFromCookies(cookieStore)
+    const userId = await getUserIdFromCookies(cookieStore)
     
-    // TEMPORARY: For testing purposes, provide a mock user ID if not logged in
+    // Return error if user is not authenticated
     if (!userId) {
-      console.log("No user ID found in cookies, using mock user ID for testing")
-      userId = "test-user-id-12345"
+      return NextResponse.json(
+        { error: "Authentication required" },
+        { status: 401 }
+      )
     }
     
     if (!rating) {

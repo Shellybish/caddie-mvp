@@ -13,11 +13,6 @@ if (!supabaseAnonKey || supabaseAnonKey === '') {
   console.error('Missing NEXT_PUBLIC_SUPABASE_ANON_KEY environment variable');
 }
 
-// Log initialization (in development only)
-if (process.env.NODE_ENV === 'development') {
-  console.log(`Initializing Supabase client with URL: ${supabaseUrl.substring(0, 15)}...`);
-}
-
 // Create a single supabase client for interacting with your database
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
@@ -46,8 +41,6 @@ export async function checkSupabaseConnection() {
 // Add a function to verify the schema and table structure
 export async function checkSupabaseSchema() {
   try {
-    console.log("Checking Supabase schema and tables...");
-    
     // List of tables we expect to exist
     const expectedTables = ['profiles', 'courses', 'course_reviews', 'lists', 'list_courses'];
     const tablesToCheck = [...expectedTables];
@@ -68,8 +61,6 @@ export async function checkSupabaseSchema() {
         continue;
       }
     }
-    
-    console.log('Available tables:', existingTables);
     
     // Check specifically for profiles table since it's critical
     const profilesExists = existingTables.includes('profiles');
