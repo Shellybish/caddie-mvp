@@ -165,21 +165,48 @@ export default function CoursesPage() {
       // Convert search results to CourseWithRating format
       return results.map(result => {
         const fullCourse = allCourses.find(course => course.id === result.id)
-        return fullCourse ? {
-          ...fullCourse,
-          rating: result.average_rating,
-          reviewCount: result.total_reviews
-        } : {
-          id: result.id,
-          name: result.name,
-          location: result.location,
-          province: result.province,
-          rating: result.average_rating,
-          reviewCount: result.total_reviews,
-          image: "/placeholder.svg?height=200&width=400",
-          created_at: new Date().toISOString()
-        } as CourseWithRating
+        if (fullCourse) {
+          // Use the full course data with updated rating info
+          return {
+            ...fullCourse,
+            rating: result.average_rating,
+            reviewCount: result.total_reviews
+          }
+        } else {
+          // Create a minimal CourseWithRating object for courses not in allCourses
+          return {
+            id: result.id,
+            name: result.name,
+            location: result.location,
+            province: result.province,
+            rating: result.average_rating,
+            reviewCount: result.total_reviews,
+            image: "/placeholder.svg?height=200&width=400",
+            created_at: new Date().toISOString(),
+            // Add default values for optional fields to prevent rendering issues
+            address: '',
+            description: '',
+            latitude: undefined,
+            longitude: undefined,
+            phone: '',
+            website: '',
+            postal_code: undefined,
+            email: '',
+            num_holes: undefined,
+            designer: '',
+            year_established: undefined,
+            green_fee_range: '',
+            slope_rating: undefined,
+            course_code: '',
+            municipality: ''
+          } as CourseWithRating
+        }
       })
+    }
+    
+    // If there's a search term but no results, return empty array
+    if (searchTerm && searchTerm.trim().length > 0 && !hasResults) {
+      return []
     }
     
     // Apply filters to all courses when not searching
@@ -191,11 +218,17 @@ export default function CoursesPage() {
       })
     }
     
-    return allCourses
+    // Only show all courses when there's no search term and no active filters
+    if (!searchTerm && !hasActiveFilters) {
+      return allCourses
+    }
+    
+    // Default fallback for any other case (shouldn't happen)
+    return []
   }
 
   const coursesToDisplay = getFilteredCourses()
-  const showNoResults = ((hasActiveFilters || !isEmpty) && !isSearching && coursesToDisplay.length === 0)
+  const showNoResults = !isSearching && coursesToDisplay.length === 0 && (hasActiveFilters || (searchTerm && searchTerm.trim().length > 0))
   const showLoading = isLoadingCourses || isSearching
 
   // Generate results description

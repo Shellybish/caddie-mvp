@@ -9,6 +9,17 @@ export async function GET(request: Request) {
     const minRatingParam = searchParams.get('minRating')
     const minRating = minRatingParam ? parseInt(minRatingParam) : 0
     
+    // Check if we have any meaningful search criteria
+    const hasSearchQuery = query && query.trim().length > 0
+    const hasProvinceFilter = province && province.trim() !== ''
+    const hasRatingFilter = minRating > 0
+    
+    // If no search query and no filters, return empty array
+    // This prevents returning all courses when searching for empty/whitespace terms
+    if (!hasSearchQuery && !hasProvinceFilter && !hasRatingFilter) {
+      return NextResponse.json([])
+    }
+    
     // Start building the query
     let queryBuilder = supabase
       .from('courses')
@@ -22,7 +33,7 @@ export async function GET(request: Request) {
       `)
     
     // Apply search filter if query exists
-    if (query && query.trim().length > 0) {
+    if (hasSearchQuery) {
       const searchTerm = query.trim().toLowerCase()
       queryBuilder = queryBuilder.or(
         `name.ilike.%${searchTerm}%,location.ilike.%${searchTerm}%,province.ilike.%${searchTerm}%,description.ilike.%${searchTerm}%`
@@ -30,7 +41,7 @@ export async function GET(request: Request) {
     }
     
     // Apply province filter
-    if (province && province.trim() !== '') {
+    if (hasProvinceFilter) {
       queryBuilder = queryBuilder.eq('province', province)
     }
     
