@@ -12,6 +12,7 @@ import {
   TrendingCourse,
   HiddenGemCourse
 } from "@/lib/api/courses"
+import { LatestReviews } from "@/components/reviews/latest-reviews"
 
 // Define types for our featured courses data
 type FeaturedCourse = {
@@ -137,34 +138,7 @@ export default async function HomePage() {
     }))
   ];
 
-  // Mock data for the homepage - only for reviews and lists sections
-  const recentReviews = [
-    {
-      id: "1",
-      user: {
-        name: "John Smith",
-        image: "/placeholder.svg?height=40&width=40",
-      },
-      course: "Leopard Creek Country Club",
-      rating: 5,
-      content:
-        "Absolutely stunning course with amazing views of Kruger National Park. The condition was impeccable and the wildlife sightings made it unforgettable.",
-      date: "2 days ago",
-    },
-    {
-      id: "2",
-      user: {
-        name: "Sarah Johnson",
-        image: "/placeholder.svg?height=40&width=40",
-      },
-      course: "Gary Player Country Club",
-      rating: 4,
-      content:
-        "Challenging layout that tests every aspect of your game. The greens were rolling perfectly, though the bunkers were a bit inconsistent.",
-      date: "5 days ago",
-    },
-  ]
-
+  // Mock data for the homepage - only for lists section now
   const popularLists = [
     {
       id: "1",
@@ -329,30 +303,7 @@ export default async function HomePage() {
                 </Button>
               </div>
               <div className="space-y-4">
-                {recentReviews.map((review) => (
-                  <Card key={review.id} className="p-4">
-                    <div className="flex gap-4">
-                      <Avatar>
-                        <AvatarImage src={review.user.image || "/placeholder.svg"} alt={review.user.name} />
-                        <AvatarFallback>{review.user.name.substring(0, 2).toUpperCase()}</AvatarFallback>
-                      </Avatar>
-                      <div className="space-y-1 flex-1">
-                        <div className="flex items-center justify-between">
-                          <p className="font-medium">{review.user.name}</p>
-                          <p className="text-xs text-muted-foreground">{review.date}</p>
-                        </div>
-                        <p className="text-sm font-medium">{review.course}</p>
-                        <div className="flex items-center">
-                          <StarRating rating={review.rating} />
-                        </div>
-                        <p className="text-sm line-clamp-2">{review.content}</p>
-                        <Button asChild variant="link" className="p-0 h-auto text-sm">
-                          <Link href={`/reviews/${review.id}`}>Read Full Review</Link>
-                        </Button>
-                      </div>
-                    </div>
-                  </Card>
-                ))}
+                <LatestReviews />
               </div>
             </div>
 

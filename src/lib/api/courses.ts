@@ -34,6 +34,26 @@ export type CourseReview = {
   created_at: string;
 };
 
+// Type for recent reviews with user and course information
+export type RecentReview = {
+  id: string;
+  user_id: string;
+  course_id: string;
+  rating: number;
+  review_text?: string;
+  date_played: string;
+  created_at: string;
+  user: {
+    username: string;
+    avatar_url?: string;
+  } | null;
+  course: {
+    id: string;
+    name: string;
+    location: string;
+  } | null;
+};
+
 // Types for featured courses from RPC functions
 export type HighRatedCourse = {
   id: string;
@@ -435,5 +455,94 @@ export async function markCourseAsPlayed(userId: string, courseId: string, dateP
   } catch (err) {
     console.error(`Exception in markCourseAsPlayed(${userId}, ${courseId}):`, err);
     throw err;
+  }
+}
+
+// Get recent reviews across the platform for homepage feed
+export async function getRecentReviews(limit = 5): Promise<RecentReview[]> {
+  try {
+    // Since course_reviews.user_id and profiles.user_id both reference auth.users,
+    // but there's no direct foreign key between them, we need to use a different approach
+    
+    // First, get the basic review data
+    const { data: reviewsData, error: reviewsError } = await supabase
+      .from('course_reviews')
+      .select(`
+        id,
+        user_id,
+        course_id,
+        rating,
+        review_text,
+        date_played,
+        created_at
+      `)
+      .gt('rating', 0) // Only include actual reviews (not 0-rated "played" entries)
+      .not('review_text', 'is', null) // Only include reviews with text
+      .neq('review_text', '') // Exclude empty review text
+      .order('created_at', { ascending: false })
+      .limit(limit);
+
+    if (reviewsError) {
+      console.error('Error fetching reviews:', reviewsError.message);
+      return [];
+    }
+
+    if (!reviewsData || reviewsData.length === 0) {
+      return [];
+    }
+
+    // Get unique user IDs and course IDs to fetch in batches
+    const userIds = [...new Set(reviewsData.map(review => review.user_id))];
+    const courseIds = [...new Set(reviewsData.map(review => review.course_id))];
+
+    // Fetch all user profiles in one query
+    const { data: profilesData } = await supabase
+      .from('profiles')
+      .select('user_id, username, avatar_url')
+      .in('user_id', userIds);
+
+    // Fetch all course data in one query
+    const { data: coursesData } = await supabase
+      .from('courses')
+      .select('id, name, location')
+      .in('id', courseIds);
+
+    // Create lookup maps for efficient data joining
+    const profilesMap = new Map(
+      (profilesData || []).map(profile => [profile.user_id, profile])
+    );
+    const coursesMap = new Map(
+      (coursesData || []).map(course => [course.id, course])
+    );
+
+    // Transform the data to match our RecentReview type
+    const transformedData: RecentReview[] = reviewsData.map((review) => {
+      const profile = profilesMap.get(review.user_id);
+      const course = coursesMap.get(review.course_id);
+
+      return {
+        id: review.id,
+        user_id: review.user_id,
+        course_id: review.course_id,
+        rating: review.rating,
+        review_text: review.review_text,
+        date_played: review.date_played,
+        created_at: review.created_at,
+        user: profile ? {
+          username: profile.username || 'Anonymous User',
+          avatar_url: profile.avatar_url
+        } : null,
+        course: course ? {
+          id: course.id,
+          name: course.name,
+          location: course.location
+        } : null
+      };
+    });
+
+    return transformedData;
+  } catch (err) {
+    console.error('Exception in getRecentReviews:', err instanceof Error ? err.message : 'Unknown error');
+    return [];
   }
 } 
