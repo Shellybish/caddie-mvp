@@ -90,6 +90,12 @@ export default function ListsPage() {
       try {
         const lists = await getPublicLists(10, 0);
         
+        // Handle case where no lists are returned
+        if (!lists || lists.length === 0) {
+          setPublicLists([]);
+          return;
+        }
+        
         // Format the public lists
         const formattedLists = lists.map((list: any) => {
           return {
@@ -103,12 +109,17 @@ export default function ListsPage() {
         
         setPublicLists(formattedLists);
       } catch (error) {
-        console.error("Error fetching public lists:", error);
-        toast({
-          title: "Error loading public lists",
-          description: "There was a problem fetching public lists. Please try again.",
-          variant: "destructive",
-        });
+        console.error("Error fetching public lists:", JSON.stringify(error, null, 2));
+        // Set empty array instead of showing error to user
+        setPublicLists([]);
+        // Only show toast for actual errors (not empty results)
+        if (error && typeof error === 'object' && 'message' in error) {
+          toast({
+            title: "Error loading public lists",
+            description: `There was a problem fetching public lists: ${error.message}`,
+            variant: "destructive",
+          });
+        }
       } finally {
         setIsLoading(false);
       }
@@ -274,7 +285,24 @@ export default function ListsPage() {
       ) : (
         <Card>
           <CardContent className="p-6 text-center">
-            <p className="text-muted-foreground">No public lists match your search</p>
+            <div className="max-w-md mx-auto">
+              <ListIcon className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+              <h3 className="font-medium mb-2">No public lists yet</h3>
+              <p className="text-muted-foreground mb-4">
+                {searchQuery 
+                  ? "No public lists match your search. Try adjusting your search terms." 
+                  : "Be the first to create a public list and share your favorite golf courses with the community!"
+                }
+              </p>
+              {!searchQuery && (
+                <Button asChild>
+                  <Link href="/lists/create">
+                    <PlusIcon className="h-4 w-4 mr-2" />
+                    Create First Public List
+                  </Link>
+                </Button>
+              )}
+            </div>
           </CardContent>
         </Card>
       )}

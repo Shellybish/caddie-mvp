@@ -649,26 +649,64 @@ export async function updateBucketListPositions(userId: string, orderedCourseIds
 
 // Get public lists from all users
 export async function getPublicLists(limit: number = 10, offset: number = 0) {
-  const { data, error } = await supabase
-    .from('lists')
-    .select(`
-      *,
-      profiles:user_id (
-        username,
-        full_name,
-        avatar_url
-      ),
-      list_courses:id (
-        id,
-        course_id,
-        position,
-        courses:course_id (*)
-      )
-    `)
-    .eq('is_public', true)
-    .order('created_at', { ascending: false })
-    .range(offset, offset + limit - 1);
+  try {
+    // First, get the basic list data with list_courses
+    const { data, error } = await supabase
+      .from('lists')
+      .select(`
+        *,
+        list_courses(
+          id,
+          course_id,
+          position,
+          courses(*)
+        )
+      `)
+      .eq('is_public', true)
+      .order('created_at', { ascending: false })
+      .range(offset, offset + limit - 1);
+      
+    if (error) {
+      console.error('Supabase error in getPublicLists:', error);
+      throw error;
+    }
     
-  if (error) throw error;
-  return data;
+    if (!data || data.length === 0) {
+      return [];
+    }
+    
+    // Get unique user IDs from the lists
+    const userIds = [...new Set(data.map(list => list.user_id))];
+    
+    // Fetch profile data for these users
+    const { data: profilesData, error: profilesError } = await supabase
+      .from('profiles')
+      .select('user_id, username, full_name, avatar_url')
+      .in('user_id', userIds);
+      
+    if (profilesError) {
+      console.error('Error fetching profiles:', profilesError);
+      // Continue without profile data rather than failing completely
+    }
+    
+    // Create a map of user_id to profile data
+    const profileMap = new Map();
+    if (profilesData) {
+      profilesData.forEach(profile => {
+        profileMap.set(profile.user_id, profile);
+      });
+    }
+    
+    // Enhance the lists with profile data
+    const enhancedLists = data.map(list => ({
+      ...list,
+      profiles: profileMap.get(list.user_id) || null
+    }));
+    
+    return enhancedLists;
+  } catch (error) {
+    console.error('Error in getPublicLists:', error);
+    // Return empty array instead of throwing to prevent page crash
+    return [];
+  }
 } 
