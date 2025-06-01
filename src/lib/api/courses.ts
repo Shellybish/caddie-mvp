@@ -43,6 +43,8 @@ export type RecentReview = {
   review_text?: string;
   date_played: string;
   created_at: string;
+  likes_count: number;
+  user_has_liked?: boolean;
   user: {
     username: string;
     avatar_url?: string;
@@ -459,7 +461,7 @@ export async function markCourseAsPlayed(userId: string, courseId: string, dateP
 }
 
 // Get recent reviews across the platform for homepage feed
-export async function getRecentReviews(limit = 5): Promise<RecentReview[]> {
+export async function getRecentReviews(limit = 5, userId?: string): Promise<RecentReview[]> {
   try {
     // Since course_reviews.user_id and profiles.user_id both reference auth.users,
     // but there's no direct foreign key between them, we need to use a different approach
@@ -494,6 +496,7 @@ export async function getRecentReviews(limit = 5): Promise<RecentReview[]> {
     // Get unique user IDs and course IDs to fetch in batches
     const userIds = [...new Set(reviewsData.map(review => review.user_id))];
     const courseIds = [...new Set(reviewsData.map(review => review.course_id))];
+    const reviewIds = reviewsData.map(review => review.id);
 
     // Fetch all user profiles in one query
     const { data: profilesData } = await supabase
@@ -507,6 +510,25 @@ export async function getRecentReviews(limit = 5): Promise<RecentReview[]> {
       .select('id, name, location')
       .in('id', courseIds);
 
+    // Fetch like counts for all reviews
+    const likeCounts = await Promise.all(
+      reviewIds.map(async (reviewId) => {
+        const count = await getReviewLikesCount(reviewId);
+        return { reviewId, count };
+      })
+    );
+
+    // Fetch user like status if userId is provided
+    let userLikeStatus: { reviewId: string; liked: boolean }[] = [];
+    if (userId) {
+      userLikeStatus = await Promise.all(
+        reviewIds.map(async (reviewId) => {
+          const liked = await hasUserLikedReview(userId, reviewId);
+          return { reviewId, liked };
+        })
+      );
+    }
+
     // Create lookup maps for efficient data joining
     const profilesMap = new Map(
       (profilesData || []).map(profile => [profile.user_id, profile])
@@ -514,11 +536,19 @@ export async function getRecentReviews(limit = 5): Promise<RecentReview[]> {
     const coursesMap = new Map(
       (coursesData || []).map(course => [course.id, course])
     );
+    const likeCountsMap = new Map(
+      likeCounts.map(item => [item.reviewId, item.count])
+    );
+    const userLikeStatusMap = new Map(
+      userLikeStatus.map(item => [item.reviewId, item.liked])
+    );
 
     // Transform the data to match our RecentReview type
     const transformedData: RecentReview[] = reviewsData.map((review) => {
       const profile = profilesMap.get(review.user_id);
       const course = coursesMap.get(review.course_id);
+      const likesCount = likeCountsMap.get(review.id) || 0;
+      const userHasLiked = userLikeStatusMap.get(review.id) || false;
 
       return {
         id: review.id,
@@ -528,6 +558,8 @@ export async function getRecentReviews(limit = 5): Promise<RecentReview[]> {
         review_text: review.review_text,
         date_played: review.date_played,
         created_at: review.created_at,
+        likes_count: likesCount,
+        user_has_liked: userId ? userHasLiked : undefined,
         user: profile ? {
           username: profile.username || 'Anonymous User',
           avatar_url: profile.avatar_url

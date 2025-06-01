@@ -6,21 +6,24 @@ import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { StarRating } from "@/components/common/star-rating"
+import { LikeButton } from "@/components/reviews/LikeButton"
 import { LatestReviewsSkeleton } from "./latest-reviews-skeleton"
 import { getRecentReviews, RecentReview } from "@/lib/api/courses"
 import { formatTimeAgo, truncateText } from "@/lib/utils"
+import { useUser } from "@/contexts/user-context"
 
 export function LatestReviews() {
   const [reviews, setReviews] = useState<RecentReview[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const { user } = useUser()
 
   useEffect(() => {
     const fetchReviews = async () => {
       try {
         setIsLoading(true)
         setError(null)
-        const data = await getRecentReviews(5)
+        const data = await getRecentReviews(5, user?.id)
         setReviews(data)
       } catch (err) {
         console.error("Error fetching recent reviews:", err)
@@ -31,7 +34,7 @@ export function LatestReviews() {
     }
 
     fetchReviews()
-  }, [])
+  }, [user?.id])
 
   if (isLoading) {
     return <LatestReviewsSkeleton />
@@ -94,11 +97,18 @@ export function LatestReviews() {
               <p className="text-sm text-muted-foreground line-clamp-3">
                 {review.review_text ? truncateText(review.review_text, 150) : ""}
               </p>
-              <Button asChild variant="link" className="p-0 h-auto text-sm text-primary">
-                <Link href={`/courses/${review.course_id}#reviews`}>
-                  Read Full Review
-                </Link>
-              </Button>
+              <div className="flex items-center justify-between">
+                <Button asChild variant="link" className="p-0 h-auto text-sm text-primary">
+                  <Link href={`/courses/${review.course_id}#reviews`}>
+                    Read Full Review
+                  </Link>
+                </Button>
+                <LikeButton
+                  reviewId={review.id}
+                  initialLiked={review.user_has_liked || false}
+                  initialLikesCount={review.likes_count}
+                />
+              </div>
             </div>
           </div>
         </Card>

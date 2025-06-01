@@ -14,7 +14,7 @@ import {
   ThumbsUpIcon 
 } from "lucide-react"
 import { getCourseById, type Course } from "@/lib/api/courses"
-import { getCourseAverageRating, getCourseReviews } from "@/lib/api/courses"
+import { getCourseAverageRating, getCourseReviews, hasUserLikedReview, getReviewLikesCount } from "@/lib/api/courses"
 import { 
   Pagination, 
   PaginationContent,
@@ -100,21 +100,44 @@ export default async function CourseDetailPage({ params, searchParams }: CourseD
       const reviewsWithLikeStatus = await Promise.all(
         paginatedReviews.map(async (review) => {
           try {
-            // Since hasUserLikedReview is not exported, we'll use a default false value
-            // We should implement the proper function or endpoint for this
+            const userHasLiked = await hasUserLikedReview(userId, review.id);
+            const likesCount = await getReviewLikesCount(review.id);
             return {
               ...review,
-              user_has_liked: false // Default value since the function is not available
+              user_has_liked: userHasLiked,
+              likes_count: likesCount
             };
           } catch (error) {
             console.error("Error checking if user liked review:", error);
-            return review;
+            return {
+              ...review,
+              user_has_liked: false,
+              likes_count: 0
+            };
           }
         })
       );
       reviews = reviewsWithLikeStatus;
     } else {
-      reviews = paginatedReviews;
+      // If no user, still fetch like counts but no user like status
+      const reviewsWithLikeCounts = await Promise.all(
+        paginatedReviews.map(async (review) => {
+          try {
+            const likesCount = await getReviewLikesCount(review.id);
+            return {
+              ...review,
+              likes_count: likesCount
+            };
+          } catch (error) {
+            console.error("Error getting like count for review:", error);
+            return {
+              ...review,
+              likes_count: 0
+            };
+          }
+        })
+      );
+      reviews = reviewsWithLikeCounts;
     }
     
     // Transform to EnhancedCourse

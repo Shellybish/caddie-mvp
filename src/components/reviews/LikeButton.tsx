@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/button"
 import { ThumbsUpIcon } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
 import { useUser } from "@/contexts/user-context"
-import { likeReview } from "@/lib/api/courses"
 
 interface LikeButtonProps {
   reviewId: string
@@ -32,7 +31,20 @@ export function LikeButton({ reviewId, initialLikesCount = 0, initialLiked = fal
 
     try {
       setIsLoading(true)
-      const result = await likeReview(reviewId, user.id)
+      
+      const response = await fetch(`/api/reviews/${reviewId}/like`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || 'Failed to toggle like')
+      }
+
+      const result = await response.json()
       
       if (result.liked) {
         setLikesCount(prev => prev + 1)
