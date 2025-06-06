@@ -55,6 +55,11 @@ export function MainNav() {
       label: "Lists",
       active: pathname === "/lists" || pathname.startsWith("/lists/"),
     },
+    {
+      href: "/members-lounge",
+      label: "Members Lounge",
+      active: pathname === "/members-lounge",
+    },
   ]
 
   const handleLogout = () => {
