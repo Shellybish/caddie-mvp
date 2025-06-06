@@ -10,8 +10,8 @@ import { useState, useRef, useEffect } from "react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Input } from "@/components/ui/input"
 import { useUser } from "@/contexts/user-context"
-import { useCourseSearch } from "@/hooks/use-course-search"
-import { SearchResultsDropdown } from "@/components/search/search-results-dropdown"
+import { useUnifiedSearch } from "@/hooks/use-unified-search"
+import { UnifiedSearchDropdown } from "@/components/search/unified-search-dropdown"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -28,7 +28,7 @@ export function MainNav() {
   const searchRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   
-  // Use the course search hook
+  // Use the unified search hook
   const {
     searchTerm,
     setSearchTerm,
@@ -37,7 +37,7 @@ export function MainNav() {
     error,
     clearSearch,
     hasResults
-  } = useCourseSearch()
+  } = useUnifiedSearch()
 
   const routes = [
     {
@@ -60,6 +60,11 @@ export function MainNav() {
       label: "Members Lounge",
       active: pathname === "/members-lounge",
     },
+    {
+      href: "/search",
+      label: "Search",
+      active: pathname === "/search",
+    },
   ]
 
   const handleLogout = () => {
@@ -79,9 +84,13 @@ export function MainNav() {
   }
 
   // Handle "View all results" click
-  const handleViewAllResults = () => {
+  const handleViewAllResults = (type?: 'courses' | 'users' | 'lists') => {
     if (searchTerm.trim()) {
-      router.push(`/courses?search=${encodeURIComponent(searchTerm)}`)
+      let url = `/search?q=${encodeURIComponent(searchTerm)}`
+      if (type && type !== 'courses') {
+        url += `&filter=${type}`
+      }
+      router.push(url)
       setIsSearchOpen(false)
       clearSearch()
     }
@@ -190,7 +199,7 @@ export function MainNav() {
                 <Input 
                   ref={inputRef}
                   type="search" 
-                  placeholder="Search courses..." 
+                  placeholder="Search courses, users, lists..." 
                   className="w-[200px] md:w-[300px] pr-8" 
                   value={searchTerm}
                   onChange={handleSearchChange}
@@ -208,8 +217,8 @@ export function MainNav() {
                 </Button>
               </form>
               
-              {/* Search Results Dropdown */}
-              <SearchResultsDropdown
+              {/* Unified Search Results Dropdown */}
+              <UnifiedSearchDropdown
                 results={results}
                 isLoading={isLoading}
                 error={error}
