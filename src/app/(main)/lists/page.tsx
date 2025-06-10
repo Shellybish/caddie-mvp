@@ -8,8 +8,9 @@ import { Input } from "@/components/ui/input"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { ListIcon, PlusIcon, SearchIcon, ThumbsUpIcon } from "lucide-react"
 import { useUser } from "@/contexts/user-context"
-import { getListsByUserId, getListById, getPublicLists } from "@/lib/api/profiles"
+import { getListsByUserId, getListById, getPublicLists, getListLikesCount, hasUserLikedList } from "@/lib/api/profiles"
 import { useToast } from "@/components/ui/use-toast"
+import { ListLikeButton } from "@/components/lists/ListLikeButton"
 
 // Define proper type for list
 type ListWithCourses = {
@@ -36,6 +37,8 @@ type ListWithCourses = {
     name: string;
     image: string;
   };
+  likesCount?: number;
+  userHasLiked?: boolean;
 };
 
 export default function ListsPage() {
@@ -59,12 +62,29 @@ export default function ListsPage() {
         const listsWithCourses = await Promise.all(
           lists.map(async (list) => {
             const listWithCourses = await getListById(list.id);
+            
+            // Try to get like data, but don't fail if it's not available
+            let likesCount = 0;
+            let userHasLiked = false;
+            
+            try {
+              [likesCount, userHasLiked] = await Promise.all([
+                getListLikesCount(list.id),
+                hasUserLikedList(user.id, list.id)
+              ]);
+            } catch (error) {
+              console.warn('Could not fetch like data for list:', list.id, error);
+              // Keep default values (0, false)
+            }
+            
             return {
               ...listWithCourses,
               author: {
                 name: user.name || user.email || 'Anonymous',
                 image: user.image || "/placeholder.svg?height=40&width=40",
-              }
+              },
+              likesCount,
+              userHasLiked
             };
           })
         );
@@ -96,16 +116,34 @@ export default function ListsPage() {
           return;
         }
         
-        // Format the public lists
-        const formattedLists = lists.map((list: any) => {
-          return {
-            ...list,
-            author: {
-              name: list.profiles?.full_name || list.profiles?.username || 'Anonymous',
-              image: list.profiles?.avatar_url || "/placeholder.svg?height=40&width=40",
+        // Format the public lists with like data
+        const formattedLists = await Promise.all(
+          lists.map(async (list: any) => {
+            // Try to get like data, but don't fail if it's not available
+            let likesCount = 0;
+            let userHasLiked = false;
+            
+            try {
+              [likesCount, userHasLiked] = await Promise.all([
+                getListLikesCount(list.id),
+                user ? hasUserLikedList(user.id, list.id) : Promise.resolve(false)
+              ]);
+            } catch (error) {
+              console.warn('Could not fetch like data for public list:', list.id, error);
+              // Keep default values (0, false)
             }
-          };
-        });
+            
+            return {
+              ...list,
+              author: {
+                name: list.profiles?.full_name || list.profiles?.username || 'Anonymous',
+                image: list.profiles?.avatar_url || "/placeholder.svg?height=40&width=40",
+              },
+              likesCount,
+              userHasLiked
+            };
+          })
+        );
         
         setPublicLists(formattedLists);
       } catch (error) {
@@ -181,10 +219,11 @@ export default function ListsPage() {
                 </div>
               </div>
             </div>
-            <div className="flex items-center text-muted-foreground">
-              <ThumbsUpIcon className="h-4 w-4 mr-1" />
-              {0} {/* Likes will be implemented later */}
-            </div>
+            <ListLikeButton
+              listId={list.id}
+              initialLiked={list.userHasLiked || false}
+              initialLikesCount={list.likesCount || 0}
+            />
           </div>
           <p className="text-sm text-muted-foreground line-clamp-2">{list.description}</p>
           <div className="flex gap-2 pt-1">

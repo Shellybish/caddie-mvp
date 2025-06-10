@@ -60,11 +60,6 @@ export function MainNav() {
       label: "Members Lounge",
       active: pathname === "/members-lounge",
     },
-    {
-      href: "/search",
-      label: "Search",
-      active: pathname === "/search",
-    },
   ]
 
   const handleLogout = () => {
@@ -100,7 +95,7 @@ export function MainNav() {
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     if (searchTerm.trim()) {
-      router.push(`/courses?search=${encodeURIComponent(searchTerm)}`)
+      router.push(`/search?q=${encodeURIComponent(searchTerm)}`)
       setIsSearchOpen(false)
       clearSearch()
     }

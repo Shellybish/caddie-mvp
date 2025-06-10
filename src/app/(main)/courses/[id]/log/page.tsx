@@ -18,8 +18,17 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { cn } from "@/lib/utils"
 import { fetchCourse, logRound } from "@/lib/api/client"
 
-export default function LogPlayPage({ params }: { params: { id: string } }) {
-  const courseId = params.id
+export default function LogPlayPage({ params }: { params: Promise<{ id: string }> }) {
+  const [courseId, setCourseId] = useState<string | null>(null)
+
+  // Resolve params asynchronously
+  useEffect(() => {
+    async function resolveParams() {
+      const resolvedParams = await params;
+      setCourseId(resolvedParams.id);
+    }
+    resolveParams();
+  }, [params]);
   const router = useRouter()
   const [date, setDate] = useState<Date | undefined>(new Date())
   const [rating, setRating] = useState(0)
@@ -32,6 +41,8 @@ export default function LogPlayPage({ params }: { params: { id: string } }) {
   
   // Fetch the actual course data
   useEffect(() => {
+    if (!courseId) return;
+    
     const fetchCourseData = async () => {
       try {
         const courseData = await fetchCourse(courseId)
@@ -64,6 +75,11 @@ export default function LogPlayPage({ params }: { params: { id: string } }) {
     setError("")
 
     try {
+      if (!courseId) {
+        setError("Course ID not available")
+        return
+      }
+      
       const result = await logRound(courseId, {
         date: date.toISOString().split('T')[0], // Convert Date to string format
         rating: rating || 0,

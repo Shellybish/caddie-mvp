@@ -236,7 +236,7 @@ export async function getUserReviews(userId: string) {
       .from('course_reviews')
       .select(`
         *,
-        course:course_id (
+        courses (
           id,
           name,
           location,

@@ -158,11 +158,11 @@ export async function getListById(listId: string) {
     .from('lists')
     .select(`
       *,
-      list_courses:id (
+      list_courses (
         id,
         course_id,
         position,
-        courses:course_id (*)
+        courses (*)
       )
     `)
     .eq('id', listId)
@@ -426,7 +426,7 @@ export async function getFavoriteCourses(userId: string) {
         id,
         course_id,
         position,
-        courses:course_id (
+        courses (
           id,
           name,
           location,
@@ -549,7 +549,7 @@ export async function getBucketListCourses(userId: string) {
         id,
         course_id,
         position,
-        courses:course_id (
+        courses (
           id,
           name,
           location,
@@ -708,5 +708,111 @@ export async function getPublicLists(limit: number = 10, offset: number = 0) {
     console.error('Error in getPublicLists:', error);
     // Return empty array instead of throwing to prevent page crash
     return [];
+  }
+}
+
+// LIST LIKES FUNCTIONALITY
+
+// Like a list
+export async function likeList(userId: string, listId: string) {
+  try {
+    const { data, error } = await supabase
+      .from('list_likes')
+      .insert({
+        user_id: userId,
+        list_id: listId
+      })
+      .select()
+      .single();
+      
+    if (error) throw error;
+    return data;
+  } catch (error) {
+    console.error('Error liking list:', error);
+    throw error;
+  }
+}
+
+// Unlike a list
+export async function unlikeList(userId: string, listId: string) {
+  try {
+    const { error } = await supabase
+      .from('list_likes')
+      .delete()
+      .eq('user_id', userId)
+      .eq('list_id', listId);
+      
+    if (error) throw error;
+    return true;
+  } catch (error) {
+    console.error('Error unliking list:', error);
+    throw error;
+  }
+}
+
+// Check if a user has liked a list
+export async function hasUserLikedList(userId: string, listId: string): Promise<boolean> {
+  try {
+    // First try the database function
+    const { data, error } = await supabase
+      .rpc('has_user_liked_list', {
+        user_uuid: userId,
+        list_uuid: listId
+      });
+      
+    if (error) {
+      // If function doesn't exist, fall back to direct query
+      console.warn('Database function not found, using fallback query:', error);
+      const { data: fallbackData, error: fallbackError } = await supabase
+        .from('list_likes')
+        .select('id')
+        .eq('user_id', userId)
+        .eq('list_id', listId)
+        .limit(1);
+        
+      if (fallbackError) {
+        console.error('Fallback query also failed:', fallbackError);
+        return false;
+      }
+      
+      return fallbackData && fallbackData.length > 0;
+    }
+    
+    return data || false;
+  } catch (err) {
+    console.error(`Exception in hasUserLikedList(${userId}, ${listId}):`, err);
+    return false;
+  }
+}
+
+// Get likes count for a list
+export async function getListLikesCount(listId: string): Promise<number> {
+  try {
+    // First try the database function
+    const { data, error } = await supabase
+      .rpc('get_list_likes_count', {
+        list_uuid: listId
+      });
+      
+    if (error) {
+      // If function doesn't exist, fall back to direct query
+      console.warn('Database function not found, using fallback query:', error);
+      const { count, error: fallbackError } = await supabase
+        .from('list_likes')
+        .select('*', { count: 'exact', head: true })
+        .eq('list_id', listId);
+        
+      if (fallbackError) {
+        console.error('Fallback query also failed:', fallbackError);
+        return 0;
+      }
+      
+      return count || 0;
+    }
+    
+    return data || 0;
+  } catch (err) {
+    console.error(`Exception in getListLikesCount(${listId}):`, err);
+    return 0;
   }
 } 

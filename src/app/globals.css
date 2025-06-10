@@ -16,11 +16,11 @@
     --primary: 144 42% 15%; /* British Racing Green */
     --primary-foreground: 144 42% 98%;
 
-    --secondary: 220 70% 30%; /* Navy Blue (same as accent) */
-    --secondary-foreground: 220 70% 98%;
+    --secondary: 36 20% 92%; /* Light muted background */
+    --secondary-foreground: 20 14.3% 4.1%;
 
-    --accent: 220 70% 30%; /* Navy Blue */
-    --accent-foreground: 220 70% 98%;
+    --accent: 36 20% 92%; /* Light muted background */
+    --accent-foreground: 20 14.3% 4.1%;
 
     --muted: 36 20% 92%;
     --muted-foreground: 20 8.9% 46.1%;
@@ -48,11 +48,11 @@
     --primary: 144 42% 25%; /* Lighter British Racing Green for dark mode */
     --primary-foreground: 144 42% 98%;
 
-    --secondary: 220 70% 50%; /* Lighter Navy Blue for dark mode (same as accent) */
-    --secondary-foreground: 220 70% 98%;
+    --secondary: 12 6.5% 15.1%; /* Dark muted background */
+    --secondary-foreground: 36 33% 97%;
 
-    --accent: 220 70% 50%; /* Lighter Navy Blue for dark mode */
-    --accent-foreground: 220 70% 98%;
+    --accent: 12 6.5% 15.1%; /* Dark muted background */
+    --accent-foreground: 36 33% 97%;
 
     --muted: 12 6.5% 15.1%;
     --muted-foreground: 24 5.4% 63.9%;
@@ -108,10 +108,10 @@
 
 /* Custom button styles */
 .btn-navy {
-  background-color: hsl(var(--accent));
-  color: hsl(var(--accent-foreground));
+  background-color: hsl(220 70% 30%); /* Direct navy blue for specific navy buttons */
+  color: hsl(220 70% 98%);
 }
 
 .btn-navy:hover {
-  background-color: hsl(var(--accent) / 0.9);
+  background-color: hsl(220 70% 25%);
 }

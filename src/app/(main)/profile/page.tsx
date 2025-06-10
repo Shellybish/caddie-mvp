@@ -23,7 +23,7 @@ import {
   X,
 } from "lucide-react"
 import { useUser } from "@/contexts/user-context"
-import { getProfileById, getUserStats, getFavoriteCourses, getBucketListCourses, updateFavoriteCoursePositions, getListsByUserId, getListById, removeFavoriteCourse, removeBucketListCourse } from "@/lib/api/profiles"
+import { getProfileById, getUserStats, getFavoriteCourses, getBucketListCourses, updateFavoriteCoursePositions, getListsByUserId, getListById, removeFavoriteCourse, removeBucketListCourse, getListLikesCount, hasUserLikedList } from "@/lib/api/profiles"
 import { getUserReviews } from "@/lib/api/courses"
 import { BucketListSearchModal } from "@/components/courses/bucket-list-search-modal"
 import { FavoriteCourseSelectionModal } from "@/components/courses/favorite-course-selector-modal"
@@ -31,6 +31,7 @@ import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, us
 import { SortableContext, arrayMove, sortableKeyboardCoordinates, useSortable, rectSwappingStrategy } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
 import { useToast } from "@/components/ui/use-toast"
+import { ListLikeButton } from "@/components/lists/ListLikeButton"
 
 // Define types for the reviews
 interface UserReview {
@@ -204,6 +205,21 @@ export default function ProfilePage() {
             lists.map(async (list) => {
               try {
                 const listWithCourses = await getListById(list.id);
+                
+                // Try to get like data, but don't fail if it's not available
+                let likesCount = 0;
+                let userHasLiked = false;
+                
+                try {
+                  [likesCount, userHasLiked] = await Promise.all([
+                    getListLikesCount(list.id),
+                    hasUserLikedList(user.id, list.id)
+                  ]);
+                } catch (error) {
+                  console.warn('Could not fetch like data for user list:', list.id, error);
+                  // Keep default values (0, false)
+                }
+                
                 return {
                   ...listWithCourses,
                   courseCount: listWithCourses.list_courses?.length || 0,
@@ -212,7 +228,8 @@ export default function ProfilePage() {
                         .slice(0, 3)
                         .map((course: any) => course.courses?.image_url || "/placeholder.svg?height=100&width=100")
                     : ["/placeholder.svg?height=100&width=100"],
-                  likes: 0 // This would be replaced with actual likes count when implemented
+                  likesCount,
+                  userHasLiked
                 };
               } catch (error) {
                 console.error(`Error fetching details for list ${list.id}:`, error);
@@ -220,7 +237,8 @@ export default function ProfilePage() {
                   ...list,
                   courseCount: 0,
                   preview: ["/placeholder.svg?height=100&width=100"],
-                  likes: 0
+                  likesCount: 0,
+                  userHasLiked: false
                 };
               }
             })
@@ -287,6 +305,21 @@ export default function ProfilePage() {
         lists.map(async (list) => {
           try {
             const listWithCourses = await getListById(list.id);
+            
+            // Try to get like data, but don't fail if it's not available
+            let likesCount = 0;
+            let userHasLiked = false;
+            
+            try {
+              [likesCount, userHasLiked] = await Promise.all([
+                getListLikesCount(list.id),
+                hasUserLikedList(user.id, list.id)
+              ]);
+            } catch (error) {
+              console.warn('Could not fetch like data for user list:', list.id, error);
+              // Keep default values (0, false)
+            }
+            
             return {
               ...listWithCourses,
               courseCount: listWithCourses.list_courses?.length || 0,
@@ -295,7 +328,8 @@ export default function ProfilePage() {
                     .slice(0, 3)
                     .map((course: any) => course.courses?.image_url || "/placeholder.svg?height=100&width=100")
                 : ["/placeholder.svg?height=100&width=100"],
-              likes: 0 // This would be replaced with actual likes count when implemented
+              likesCount,
+              userHasLiked
             };
           } catch (error) {
             console.error(`Error fetching details for list ${list.id}:`, error);
@@ -303,7 +337,8 @@ export default function ProfilePage() {
               ...list,
               courseCount: 0,
               preview: ["/placeholder.svg?height=100&width=100"],
-              likes: 0
+              likesCount: 0,
+              userHasLiked: false
             };
           }
         })
@@ -924,10 +959,11 @@ export default function ProfilePage() {
                       <CardContent className="p-4 space-y-3">
                         <div className="flex justify-between items-start">
                           <h3 className="font-medium">{list.title}</h3>
-                          <div className="flex items-center text-sm text-muted-foreground">
-                            <ThumbsUpIcon className="h-3.5 w-3.5 mr-1" />
-                            {list.likes}
-                          </div>
+                          <ListLikeButton
+                            listId={list.id}
+                            initialLiked={list.userHasLiked || false}
+                            initialLikesCount={list.likesCount || 0}
+                          />
                         </div>
                         <p className="text-sm text-muted-foreground line-clamp-2">{list.description}</p>
                         <div className="flex items-center text-sm text-muted-foreground">

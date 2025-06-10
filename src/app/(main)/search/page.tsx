@@ -172,7 +172,7 @@ function SearchResultsContent() {
                     <Icon className="h-4 w-4" />
                     {filter.label}
                     {!isLoading && (
-                      <Badge variant={activeFilter === filter.key ? "secondary" : "default"} className="ml-1">
+                      <Badge variant={activeFilter === filter.key ? "secondary" : "outline"} className="ml-1">
                         {filter.count}
                       </Badge>
                     )}

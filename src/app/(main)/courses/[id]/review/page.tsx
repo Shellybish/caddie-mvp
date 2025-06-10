@@ -13,8 +13,8 @@ import { ChevronLeftIcon } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
 import { fetchCourse, submitReview } from "@/lib/api/client"
 
-export default function ReviewPage({ params }: { params: { id: string } }) {
-  const courseId = params.id
+export default function ReviewPage({ params }: { params: Promise<{ id: string }> }) {
+  const [courseId, setCourseId] = useState<string | null>(null)
   const router = useRouter()
   const [rating, setRating] = useState(0)
   const [reviewText, setReviewText] = useState("")
@@ -24,8 +24,19 @@ export default function ReviewPage({ params }: { params: { id: string } }) {
   const { toast } = useToast()
   const [error, setError] = useState("")
 
+  // Resolve params asynchronously
+  useEffect(() => {
+    async function resolveParams() {
+      const resolvedParams = await params;
+      setCourseId(resolvedParams.id);
+    }
+    resolveParams();
+  }, [params]);
+
   // Fetch the actual course data
   useEffect(() => {
+    if (!courseId) return;
+    
     const fetchCourseData = async () => {
       try {
         const courseData = await fetchCourse(courseId)
@@ -58,6 +69,11 @@ export default function ReviewPage({ params }: { params: { id: string } }) {
     setError("")
 
     try {
+      if (!courseId) {
+        setError("Course ID not available")
+        return
+      }
+      
       const result = await submitReview(courseId, {
         rating,
         review_text: reviewText

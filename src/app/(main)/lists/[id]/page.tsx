@@ -1,12 +1,17 @@
+"use client"
+
+import { useEffect, useState } from "react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { StarRating } from "@/components/common/star-rating"
 import { ChevronLeftIcon, ListIcon, MapPinIcon, Share2Icon, ThumbsUpIcon, UserIcon } from "lucide-react"
-import { getListById, getProfileById, getListsByUserId } from "@/lib/api/profiles"
+import { getListById, getProfileById, getListsByUserId, getListLikesCount, hasUserLikedList } from "@/lib/api/profiles"
 import { getCourseAverageRating } from "@/lib/api/courses"
 import { type List } from "@/lib/api/profiles"
+import { ListLikeButton } from "@/components/lists/ListLikeButton"
+import { useUser } from "@/contexts/user-context"
 
 // Define the extended list type with UI-specific properties
 type ExtendedList = List & {
@@ -17,7 +22,8 @@ type ExtendedList = List & {
     image?: string;
   };
   courseCount: number;
-  likes?: number;
+  likesCount: number;
+  userHasLiked: boolean;
   courses: Array<{
     id: string;
     name: string;
@@ -28,95 +34,127 @@ type ExtendedList = List & {
   }>;
 }
 
-export default async function ListDetailPage({ params }: { params: { id: string } }) {
-  // Properly await params to fix the Next.js 15.2.4 warning
-  const resolvedParams = await Promise.resolve(params);
-  const listId = resolvedParams.id;
+export default function ListDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { user } = useUser()
+  const [list, setList] = useState<ExtendedList | null>(null)
+  const [otherListsByAuthor, setOtherListsByAuthor] = useState<List[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [listId, setListId] = useState<string | null>(null)
   
-  // Try to fetch the list from the database
-  let list: ExtendedList;
-  let otherListsByAuthor: List[] = [];
-  
-  try {
-    // Get the list data
-    const dbList = await getListById(listId);
-    
-    // Get the creator's profile
-    const profile = await getProfileById(dbList.user_id);
-    
-    // Get ratings for each course
-    const coursesWithRatings = await Promise.all(
-      dbList.list_courses?.map(async (item: any) => {
-        const rating = await getCourseAverageRating(item.course_id);
-        return {
-          id: item.courses.id,
-          name: item.courses.name,
-          location: `${item.courses.location}, ${item.courses.province}`,
-          rating: rating,
-          image: "/placeholder.svg?height=200&width=400",
-          description: item.courses.description
-        };
-      }) || []
-    );
-    
-    // Get other lists by the same user
-    const userLists = await getListsByUserId(dbList.user_id, true);
-    otherListsByAuthor = userLists.filter(otherList => otherList.id !== dbList.id).slice(0, 3);
-    
-    // Transform to ExtendedList with UI properties
-    list = {
-      ...dbList,
-      author: {
-        id: dbList.user_id,
-        name: profile.full_name || profile.username,
-        username: profile.username,
-        image: profile.avatar_url || "/placeholder.svg?height=40&width=40",
-      },
-      courseCount: dbList.list_courses?.length || 0,
-      likes: undefined, // We don't have likes functionality yet
-      courses: coursesWithRatings
-    } as ExtendedList;
-  } catch (error) {
-    console.error("Error fetching list:", error);
-    // If list not found or error, use mock data as fallback
-    list = {
-      id: listId,
-      user_id: "user1", // Required for List type
-      is_public: true, // Required for List type
-      created_at: new Date().toISOString(), // Required for List type
-      title: "Top 10 Courses in Western Cape",
-      description:
-        "The most beautiful and challenging courses in the Western Cape region, featuring stunning coastal and mountain views. These courses offer a perfect blend of scenic beauty and golfing challenge.",
-      author: {
-        id: "user1",
-        name: "User",
-        username: "user",
-        image: "/placeholder.svg?height=40&width=40",
-      },
-      courseCount: 10,
-      likes: undefined,
-      courses: [
-        {
-          id: "1",
-          name: "Fancourt Links",
-          location: "George, Western Cape",
-          rating: 0,
-          image: "/placeholder.svg?height=200&width=400",
-          description:
-            "Designed by Gary Player, this championship course is consistently ranked as South Africa's best. The links-style layout offers a true test of golf in a spectacular setting.",
-        },
-        {
-          id: "2",
-          name: "Arabella Golf Club",
-          location: "Hermanus, Western Cape",
-          rating: 0,
-          image: "/placeholder.svg?height=200&width=400",
-          description:
-            "Set alongside the Bot River Lagoon with the Kogelberg Mountains as a backdrop, Arabella is one of the most picturesque courses in the country. The closing stretch of holes along the lagoon is particularly memorable.",
-        },
-        // ... more courses
-      ],
+  // Resolve params asynchronously
+  useEffect(() => {
+    async function resolveParams() {
+      const resolvedParams = await params;
+      setListId(resolvedParams.id);
     }
+    resolveParams();
+  }, [params]);
+  
+  useEffect(() => {
+    async function fetchListData() {
+      if (!listId) return; // Don't fetch if listId is not ready
+      
+      try {
+        setIsLoading(true)
+        
+        // Get the list data
+        const dbList = await getListById(listId);
+        
+        // Get the creator's profile
+        const profile = await getProfileById(dbList.user_id);
+        
+        // Get ratings for each course
+        const coursesWithRatings = await Promise.all(
+          dbList.list_courses?.map(async (item: any) => {
+            const rating = await getCourseAverageRating(item.course_id);
+            return {
+              id: item.courses.id,
+              name: item.courses.name,
+              location: `${item.courses.location}, ${item.courses.province}`,
+              rating: rating,
+              image: "/placeholder.svg?height=200&width=400",
+              description: item.courses.description
+            };
+          }) || []
+        );
+        
+        // Get like data
+        let likesCount = 0;
+        let userHasLiked = false;
+        
+        try {
+          [likesCount, userHasLiked] = await Promise.all([
+            getListLikesCount(listId),
+            user ? hasUserLikedList(user.id, listId) : Promise.resolve(false)
+          ]);
+        } catch (error) {
+          console.warn('Could not fetch like data for list detail:', listId, error);
+          // Keep default values (0, false)
+        }
+        
+        // Get other lists by the same user
+        const userLists = await getListsByUserId(dbList.user_id, true);
+        setOtherListsByAuthor(userLists.filter(otherList => otherList.id !== dbList.id).slice(0, 3));
+        
+        // Transform to ExtendedList with UI properties
+        const extendedList: ExtendedList = {
+          ...dbList,
+          author: {
+            id: dbList.user_id,
+            name: profile.full_name || profile.username,
+            username: profile.username,
+            image: profile.avatar_url || "/placeholder.svg?height=40&width=40",
+          },
+          courseCount: dbList.list_courses?.length || 0,
+          likesCount,
+          userHasLiked,
+          courses: coursesWithRatings
+        };
+        
+        setList(extendedList);
+      } catch (error) {
+        console.error("Error fetching list:", error);
+        // Set a fallback list with minimal data
+        setList({
+          id: listId || "unknown",
+          user_id: "unknown",
+          is_public: true,
+          created_at: new Date().toISOString(),
+          title: "List not found",
+          description: "This list could not be loaded.",
+          author: {
+            id: "unknown",
+            name: "Unknown User",
+            username: "unknown",
+            image: "/placeholder.svg?height=40&width=40",
+          },
+          courseCount: 0,
+          likesCount: 0,
+          userHasLiked: false,
+          courses: []
+        });
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    fetchListData();
+  }, [listId, user])
+  
+  if (isLoading) {
+    return (
+      <div className="container py-8 md:py-12">
+        <div className="text-center py-8">Loading list...</div>
+      </div>
+    )
+  }
+  
+  if (!list) {
+    return (
+      <div className="container py-8 md:py-12">
+        <div className="text-center py-8">List not found</div>
+      </div>
+    )
   }
 
   return (
@@ -145,12 +183,11 @@ export default async function ListDetailPage({ params }: { params: { id: string 
                 <ListIcon className="h-4 w-4 mr-1" />
                 {list.courseCount} courses
               </div>
-              {list.likes !== undefined && (
-                <div className="flex items-center text-sm text-muted-foreground">
-                  <ThumbsUpIcon className="h-4 w-4 mr-1" />
-                  {list.likes} likes
-                </div>
-              )}
+              <ListLikeButton
+                listId={list.id}
+                initialLiked={list.userHasLiked}
+                initialLikesCount={list.likesCount}
+              />
             </div>
             <p className="text-muted-foreground">{list.description}</p>
           </div>
